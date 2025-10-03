@@ -1,11 +1,10 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 import joblib
 
-# --- Helper Functions ---
-
+# --- Helper Function for Profit Calculation ---
 def calculate_profit(odds, bet_amount):
     """Calculates profit for a winning bet based on American odds."""
     if odds < 0:
@@ -13,99 +12,73 @@ def calculate_profit(odds, bet_amount):
     else:
         return (odds / 100) * bet_amount
 
-def calculate_implied_probability(odds):
-    """Converts American odds to implied probability."""
-    if odds < 0:
-        return abs(odds) / (abs(odds) + 100)
-    else:
-        return 100 / (odds + 100)
-
 # --- 1. Load and Prepare Data ---
 file_path = 'data/games.csv'
 df = pd.read_csv(file_path)
+
 df = df[(df['game_type'] == 'REG') & (df['season'] >= 2006)]
-columns_to_keep = [
-    'result', 'spread_line', 'home_moneyline', 'away_moneyline',
-    'total_line', 'home_rest', 'away_rest', 'div_game'
-]
+
+# Keep only the columns we need for this simple model
+columns_to_keep = ['result', 'spread_line', 'home_moneyline', 'away_moneyline']
 df = df[columns_to_keep]
 df = df.dropna()
 
-# --- 2. Feature Engineering ---
+# --- 2. Feature Engineering (Target: Outright Winner) ---
 df['home_win'] = (df['result'] > 0).astype(int)
 
 # --- 3. Prepare Data for Modeling ---
-features = ['spread_line', 'total_line', 'home_rest', 'away_rest', 'div_game']
-X = df[features]
+# Our only feature is the spread_line
+X = df[['spread_line']]
 y = df['home_win']
+
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# --- 4. Train the Model ---
-model = RandomForestClassifier(n_estimators=100, min_samples_leaf=10, random_state=42)
+# --- 4. Train and Evaluate the Model ---
+model = LogisticRegression()
 model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
 
-# --- 5. Value Betting Simulation ---
+print("--- Simple Model (Best Accuracy) ---")
+print("Feature: spread_line | Model: LogisticRegression")
+print(f"Accuracy on test data: {accuracy:.4f}")
 
-# Get prediction probabilities for the test set
-# The output is an array like [[P(lose), P(win)], [P(lose), P(win)], ...]
-probabilities = model.predict_proba(X_test)
-
+# --- 5. Moneyline Profitability Simulation ---
 bet_amount = 100
 total_profit = 0
 total_bets = 0
 wins = 0
-# --- MODIFIED: Define our "edge" threshold ---
-# We will only bet if our model's confidence is at least 5% higher than the implied odds.
-CONFIDENCE_THRESHOLD = 0.05
 
 test_df = df.loc[X_test.index]
-test_df['model_prob_home_win'] = probabilities[:, 1] # Probability of home team winning
+test_df['prediction'] = y_pred
 
 for index, row in test_df.iterrows():
-    prob_home_win = row['model_prob_home_win']
-    prob_away_win = 1 - prob_home_win
+    total_bets += 1
+    actual_winner = row['home_win']
+    predicted_winner = row['prediction']
 
-    implied_prob_home = calculate_implied_probability(row['home_moneyline'])
-    implied_prob_away = calculate_implied_probability(row['away_moneyline'])
-
-    # --- Betting Logic: Look for an edge ---
-
-    # Case 1: Model sees value in the home team
-    if prob_home_win > implied_prob_home + CONFIDENCE_THRESHOLD:
-        total_bets += 1
-        if row['home_win'] == 1:
+    if predicted_winner == 1:
+        if actual_winner == 1:
             wins += 1
             total_profit += calculate_profit(row['home_moneyline'], bet_amount)
         else:
             total_profit -= bet_amount
-
-    # Case 2: Model sees value in the away team
-    elif prob_away_win > implied_prob_away + CONFIDENCE_THRESHOLD:
-        total_bets += 1
-        if row['home_win'] == 0:
+    else:
+        if actual_winner == 0:
             wins += 1
             total_profit += calculate_profit(row['away_moneyline'], bet_amount)
         else:
             total_profit -= bet_amount
 
-win_rate = (wins / total_bets) * 100 if total_bets > 0 else 0
-roi = (total_profit / (total_bets * bet_amount)) * 100 if total_bets > 0 else 0
+win_rate = (wins / total_bets) * 100
+roi = (total_profit / (total_bets * bet_amount)) * 100
 
-print("--- Value Betting Simulation Results (Edge = 5%) ---")
-print(f"Total Bets Placed: {total_bets} (out of {len(test_df)} games)")
-if total_bets > 0:
-    print(f"Winning Bets: {wins} ({win_rate:.2f}%)")
-    print(f"Total Profit/Loss: ${total_profit:.2f}")
-    print(f"Return on Investment (ROI): {roi:.2f}%")
-else:
-    print("No value bets found with the current confidence threshold.")
-
-if total_profit > 0:
-    print("\nSUCCESS! This value-betting strategy was profitable!")
-else:
-    print("\nThis strategy was not profitable. Beating the market is extremely difficult.")
+print("\n--- Moneyline Betting Simulation Results ---")
+print(f"Total Bets Placed: {total_bets}")
+print(f"Winning Bets: {wins} ({win_rate:.2f}%)")
+print(f"Total Profit/Loss: ${total_profit:.2f}")
+print(f"Return on Investment (ROI): {roi:.2f}%")
 
 # --- 6. Save the Model ---
 joblib.dump(model, 'model.pkl')
 print("\nModel saved to model.pkl")
-

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFL Game Predictor</title>
+    <style>
+        /* Basic CSS for a clean, modern dark theme */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 24px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+        }
+        header {
+            text-align: center;
+            border-bottom: 1px solid #333;
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+        h1 {
+            color: #ffffff;
+            margin: 0;
+        }
+        p {
+            color: #a0a0a0;
+        }
+        .game-card {
+            background-color: #1e1e1e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid #333;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .game-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+        }
+        .teams {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 16px;
+        }
+        .team {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 40%;
+        }
+        .vs {
+            color: #666;
+            font-size: 0.8em;
+        }
+        .prediction {
+            background-color: #333;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .prediction-winner {
+            font-weight: bold;
+            font-size: 1.2em;
+            color: #4CAF50; /* A green to indicate the winner */
+        }
+        .prediction-details {
+            font-size: 0.9em;
+            color: #a0a0a0;
+            margin-top: 8px;
+        }
+        .loader {
+            text-align: center;
+            font-size: 1.2em;
+            padding: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>NFL Game Predictor</h1>
+            <p>Machine learning predictions for the upcoming week of games.</p>
+        </header>
+
+        <main id="game-list">
+            <div class="loader">Loading predictions...</div>
+        </main>
+    </div>
+
+    <script>
+        // JavaScript to fetch and display predictions when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            fetch('/get_predictions')
+                .then(response => response.json())
+                .then(data => {
+                    const gameList = document.getElementById('game-list');
+                    // Clear the "Loading..." message
+                    gameList.innerHTML = '';
+
+                    if (data.error) {
+                        gameList.innerHTML = `<p style="text-align: center; color: #ff6b6b;">${data.error}</p>`;
+                        return;
+                    }
+                    
+                    if (data.length === 0) {
+                         gameList.innerHTML = `<p style="text-align: center;">No game data found for the latest week.</p>`;
+                         return;
+                    }
+
+                    // Loop through each game prediction and create a card for it
+                    data.forEach(game => {
+                        const card = document.createElement('div');
+                        card.className = 'game-card';
+
+                        card.innerHTML = `
+                            <div class="teams">
+                                <div class="team">
+                                    <span>${game.away_team}</span>
+                                    <span style="font-size: 0.6em; color: #a0a0a0;">Away</span>
+                                </div>
+                                <span class="vs">VS</span>
+                                <div class="team">
+                                    <span>${game.home_team}</span>
+                                    <span style="font-size: 0.6em; color: #a0a0a0;">Home</span>
+                                </div>
+                            </div>
+                            <div class="prediction">
+                                <div>Predicted Winner: <span class="prediction-winner">${game.predicted_winner}</span></div>
+                                <div class="prediction-details">
+                                    <span>Model Confidence: ${game.confidence}</span> | 
+                                    <span>Spread: ${game.spread_line > 0 ? '+' : ''}${game.spread_line}</span>
+                                </div>
+                            </div>
+                        `;
+                        gameList.appendChild(card);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching predictions:', error);
+                    const gameList = document.getElementById('game-list');
+                    gameList.innerHTML = `<p style="text-align: center; color: #ff6b6b;">Could not load predictions. Is the server running?</p>`;
+                });
+        });
+    </script>
+</body>
+</html>

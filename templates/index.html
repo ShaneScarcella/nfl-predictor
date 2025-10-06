@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NFL Game Predictor</title>
     <style>
-        /* Basic CSS for a clean, modern dark theme */
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #121212;
@@ -25,13 +24,40 @@
             padding-bottom: 16px;
             margin-bottom: 24px;
         }
-        h1 {
+        h1, h2 {
             color: #ffffff;
             margin: 0;
         }
-        p {
+        p { color: #a0a0a0; }
+
+        /* --- Styles for the Performance Dashboard --- */
+        .performance-summary {
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+        .stats-container {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 16px;
+        }
+        .stat {
+            display: flex;
+            flex-direction: column;
+        }
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #fff;
+        }
+        .stat-label {
+            font-size: 0.9em;
             color: #a0a0a0;
         }
+
         .game-card {
             background-color: #1e1e1e;
             border-radius: 12px;
@@ -39,11 +65,6 @@
             margin-bottom: 16px;
             border: 1px solid #333;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        .game-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
         }
         .teams {
             display: flex;
@@ -59,12 +80,9 @@
             align-items: center;
             width: 40%;
         }
-        .vs {
-            color: #666;
-            font-size: 0.8em;
-        }
+        .vs { color: #666; font-size: 0.8em; }
         .prediction {
-            background-color: #333;
+            background-color: #282828; /* Slightly lighter background */
             padding: 12px;
             border-radius: 8px;
             text-align: center;
@@ -72,12 +90,27 @@
         .prediction-winner {
             font-weight: bold;
             font-size: 1.2em;
-            color: #4CAF50; /* A green to indicate the winner */
+            color: #4CAF50;
         }
         .prediction-details {
             font-size: 0.9em;
             color: #a0a0a0;
-            margin-top: 8px;
+            margin-top: 12px;
+        }
+
+        /* --- Styles for the Confidence Bar --- */
+        .confidence-bar-container {
+            background-color: #444;
+            border-radius: 5px;
+            height: 10px;
+            margin: 8px auto 0;
+            width: 80%;
+        }
+        .confidence-bar {
+            background-color: #4CAF50;
+            height: 100%;
+            border-radius: 5px;
+            transition: width 0.5s ease-in-out;
         }
         .loader {
             text-align: center;
@@ -93,18 +126,51 @@
             <p>Machine learning predictions for the upcoming week of games.</p>
         </header>
 
+        <section class="performance-summary" id="performance-summary">
+            <h2>Model Performance (Historical)</h2>
+            <div id="performance-loader" class="loader">Loading stats...</div>
+        </section>
+
         <main id="game-list">
-            <div class="loader">Loading predictions...</div>
+            <div id="games-loader" class="loader">Loading predictions...</div>
         </main>
     </div>
 
     <script>
-        // JavaScript to fetch and display predictions when the page loads
         document.addEventListener('DOMContentLoaded', () => {
+            // --- Fetch and display performance stats ---
+            const performanceContainer = document.getElementById('performance-summary');
+            fetch('/get_performance_stats')
+                .then(response => response.json())
+                .then(stats => {
+                    performanceContainer.innerHTML = `
+                        <h2>Model Performance (Historical)</h2>
+                        <div class="stats-container">
+                            <div class="stat">
+                                <span class="stat-value">${stats.accuracy}</span>
+                                <span class="stat-label">Prediction Accuracy</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">${stats.simulated_roi}</span>
+                                <span class="stat-label">Simulated ROI</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-value">${stats.total_games_tested}</span>
+                                <span class="stat-label">Games Tested</span>
+                            </div>
+                        </div>
+                    `;
+                })
+                .catch(error => {
+                    console.error('Error fetching performance stats:', error);
+                    performanceContainer.innerHTML = '<h2>Model Performance (Historical)</h2><p>Could not load stats.</p>';
+                });
+
+            // --- Fetch and display game predictions ---
+            const gameList = document.getElementById('game-list');
             fetch('/get_predictions')
                 .then(response => response.json())
                 .then(data => {
-                    const gameList = document.getElementById('game-list');
                     // Clear the "Loading..." message
                     gameList.innerHTML = '';
 
@@ -112,16 +178,17 @@
                         gameList.innerHTML = `<p style="text-align: center; color: #ff6b6b;">${data.error}</p>`;
                         return;
                     }
-                    
                     if (data.length === 0) {
                          gameList.innerHTML = `<p style="text-align: center;">No game data found for the latest week.</p>`;
                          return;
                     }
 
-                    // Loop through each game prediction and create a card for it
                     data.forEach(game => {
                         const card = document.createElement('div');
                         card.className = 'game-card';
+                        
+                        // Convert confidence to percentage string for display
+                        const confidencePercent = (game.confidence * 100).toFixed(0);
 
                         card.innerHTML = `
                             <div class="teams">
@@ -138,8 +205,11 @@
                             <div class="prediction">
                                 <div>Predicted Winner: <span class="prediction-winner">${game.predicted_winner}</span></div>
                                 <div class="prediction-details">
-                                    <span>Model Confidence: ${game.confidence}</span> | 
+                                    <span>Model Confidence: ${confidencePercent}%</span> | 
                                     <span>Spread: ${game.spread_line > 0 ? '+' : ''}${game.spread_line}</span>
+                                </div>
+                                <div class="confidence-bar-container">
+                                    <div class="confidence-bar" style="width: ${confidencePercent}%;"></div>
                                 </div>
                             </div>
                         `;
@@ -148,7 +218,6 @@
                 })
                 .catch(error => {
                     console.error('Error fetching predictions:', error);
-                    const gameList = document.getElementById('game-list');
                     gameList.innerHTML = `<p style="text-align: center; color: #ff6b6b;">Could not load predictions. Is the server running?</p>`;
                 });
         });

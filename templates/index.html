@@ -7,115 +7,37 @@
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #121212;
-            color: #e0e0e0;
-            margin: 0;
-            padding: 24px;
-            display: flex;
-            justify-content: center;
+            background-color: #121212; color: #e0e0e0; margin: 0; padding: 24px;
+            display: flex; justify-content: center;
         }
-        .container {
-            width: 100%;
-            max-width: 800px;
-        }
-        header {
-            text-align: center;
-            border-bottom: 1px solid #333;
-            padding-bottom: 16px;
-            margin-bottom: 24px;
-        }
-        h1, h2 {
-            color: #ffffff;
-            margin: 0;
-        }
+        .container { width: 100%; max-width: 800px; }
+        header { text-align: center; border-bottom: 1px solid #333; padding-bottom: 16px; margin-bottom: 24px; }
+        h1, h2 { color: #ffffff; margin: 0; }
         p { color: #a0a0a0; }
-
-        /* --- Styles for the Performance Dashboard --- */
-        .performance-summary {
-            background-color: #1e1e1e;
-            border: 1px solid #333;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 24px;
-            text-align: center;
-        }
-        .stats-container {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 16px;
-        }
-        .stat {
-            display: flex;
-            flex-direction: column;
-        }
-        .stat-value {
-            font-size: 1.8em;
-            font-weight: bold;
-            color: #fff;
-        }
-        .stat-label {
-            font-size: 0.9em;
-            color: #a0a0a0;
-        }
-
-        .game-card {
-            background-color: #1e1e1e;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 16px;
-            border: 1px solid #333;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
-        }
-        .teams {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 1.5em;
-            font-weight: bold;
-            margin-bottom: 16px;
-        }
-        .team {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            width: 40%;
-        }
+        .performance-summary { background-color: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 20px; margin-bottom: 24px; text-align: center; }
+        .stats-container { display: flex; justify-content: space-around; margin-top: 16px; }
+        .stat { display: flex; flex-direction: column; }
+        .stat-value { font-size: 1.8em; font-weight: bold; color: #fff; }
+        .stat-label { font-size: 0.9em; color: #a0a0a0; }
+        .game-card { background-color: #1e1e1e; border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid #333; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); }
+        .teams { display: flex; justify-content: space-between; align-items: center; font-size: 1.5em; font-weight: bold; margin-bottom: 16px; }
+        .team { display: flex; flex-direction: column; align-items: center; width: 40%; }
         .vs { color: #666; font-size: 0.8em; }
-        .prediction {
-            background-color: #282828; /* Slightly lighter background */
-            padding: 12px;
-            border-radius: 8px;
-            text-align: center;
+        .prediction { background-color: #282828; padding: 12px; border-radius: 8px; text-align: center; }
+        .prediction-winner { font-weight: bold; font-size: 1.2em; color: #4CAF50; }
+        .prediction-details { font-size: 0.9em; color: #a0a0a0; margin-top: 12px; }
+        .confidence-bar-container { background-color: #444; border-radius: 5px; height: 10px; margin: 8px auto 0; width: 80%; }
+        .confidence-bar { background-color: #4CAF50; height: 100%; border-radius: 5px; transition: width 0.5s ease-in-out; }
+        .loader { text-align: center; font-size: 1.2em; padding: 40px; }
+        /* --- NEW: Styles for the dropdown filters --- */
+        .filters {
+            display: flex; gap: 16px; justify-content: center;
+            margin-bottom: 24px;
         }
-        .prediction-winner {
-            font-weight: bold;
-            font-size: 1.2em;
-            color: #4CAF50;
-        }
-        .prediction-details {
-            font-size: 0.9em;
-            color: #a0a0a0;
-            margin-top: 12px;
-        }
-
-        /* --- Styles for the Confidence Bar --- */
-        .confidence-bar-container {
-            background-color: #444;
-            border-radius: 5px;
-            height: 10px;
-            margin: 8px auto 0;
-            width: 80%;
-        }
-        .confidence-bar {
-            background-color: #4CAF50;
-            height: 100%;
-            border-radius: 5px;
-            transition: width 0.5s ease-in-out;
-        }
-        .loader {
-            text-align: center;
-            font-size: 1.2em;
-            padding: 40px;
+        .filters select {
+            background-color: #282828; color: #e0e0e0;
+            border: 1px solid #444; border-radius: 8px;
+            padding: 8px 12px; font-size: 1em;
         }
     </style>
 </head>
@@ -123,7 +45,7 @@
     <div class="container">
         <header>
             <h1>NFL Game Predictor</h1>
-            <p>Machine learning predictions for the upcoming week of games.</p>
+            <p>Machine learning predictions for past and future NFL games.</p>
         </header>
 
         <section class="performance-summary" id="performance-summary">
@@ -131,95 +53,99 @@
             <div id="performance-loader" class="loader">Loading stats...</div>
         </section>
 
+        <div class="filters">
+            <select id="season-select" onchange="handleSeasonChange()"><option>Loading Seasons...</option></select>
+            <select id="week-select" onchange="fetchAndDisplayPredictions()"><option>Select Season First</option></select>
+        </div>
+
         <main id="game-list">
-            <div id="games-loader" class="loader">Loading predictions...</div>
+            <div class="loader" id="games-loader">Please select a season and week to see predictions.</div>
         </main>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // --- Fetch and display performance stats ---
-            const performanceContainer = document.getElementById('performance-summary');
-            fetch('/get_performance_stats')
-                .then(response => response.json())
-                .then(stats => {
-                    performanceContainer.innerHTML = `
-                        <h2>Model Performance (Historical)</h2>
-                        <div class="stats-container">
-                            <div class="stat">
-                                <span class="stat-value">${stats.accuracy}</span>
-                                <span class="stat-label">Prediction Accuracy</span>
-                            </div>
-                            <div class="stat">
-                                <span class="stat-value">${stats.simulated_roi}</span>
-                                <span class="stat-label">Simulated ROI</span>
-                            </div>
-                            <div class="stat">
-                                <span class="stat-value">${stats.total_games_tested}</span>
-                                <span class="stat-label">Games Tested</span>
-                            </div>
-                        </div>
-                    `;
-                })
-                .catch(error => {
-                    console.error('Error fetching performance stats:', error);
-                    performanceContainer.innerHTML = '<h2>Model Performance (Historical)</h2><p>Could not load stats.</p>';
-                });
-
-            // --- Fetch and display game predictions ---
+        // Store the season/week data globally
+        let seasonsData = {};
+        
+        // --- NEW: Function to get predictions for a selected week ---
+        const fetchAndDisplayPredictions = () => {
+            const seasonSelect = document.getElementById('season-select');
+            const weekSelect = document.getElementById('week-select');
+            const selectedSeason = seasonSelect.value;
+            const selectedWeek = weekSelect.value;
             const gameList = document.getElementById('game-list');
-            fetch('/get_predictions')
+            
+            if (!selectedSeason || !selectedWeek) return;
+
+            gameList.innerHTML = `<div class="loader">Loading predictions for ${selectedSeason} - Week ${selectedWeek}...</div>`;
+
+            fetch(`/get_predictions?season=${selectedSeason}&week=${selectedWeek}`)
                 .then(response => response.json())
                 .then(data => {
-                    // Clear the "Loading..." message
-                    gameList.innerHTML = '';
-
+                    gameList.innerHTML = ''; // Clear loader
                     if (data.error) {
                         gameList.innerHTML = `<p style="text-align: center; color: #ff6b6b;">${data.error}</p>`;
                         return;
                     }
                     if (data.length === 0) {
-                         gameList.innerHTML = `<p style="text-align: center;">No game data found for the latest week.</p>`;
+                         gameList.innerHTML = `<p style="text-align: center;">No game data found for this week.</p>`;
                          return;
                     }
-
                     data.forEach(game => {
                         const card = document.createElement('div');
                         card.className = 'game-card';
-                        
-                        // Convert confidence to percentage string for display
                         const confidencePercent = (game.confidence * 100).toFixed(0);
-
                         card.innerHTML = `
-                            <div class="teams">
-                                <div class="team">
-                                    <span>${game.away_team}</span>
-                                    <span style="font-size: 0.6em; color: #a0a0a0;">Away</span>
-                                </div>
-                                <span class="vs">VS</span>
-                                <div class="team">
-                                    <span>${game.home_team}</span>
-                                    <span style="font-size: 0.6em; color: #a0a0a0;">Home</span>
-                                </div>
-                            </div>
-                            <div class="prediction">
-                                <div>Predicted Winner: <span class="prediction-winner">${game.predicted_winner}</span></div>
-                                <div class="prediction-details">
-                                    <span>Model Confidence: ${confidencePercent}%</span> | 
-                                    <span>Spread: ${game.spread_line > 0 ? '+' : ''}${game.spread_line}</span>
-                                </div>
-                                <div class="confidence-bar-container">
-                                    <div class="confidence-bar" style="width: ${confidencePercent}%;"></div>
-                                </div>
-                            </div>
+                            <div class="teams"><div class="team"><span>${game.away_team}</span><span style="font-size: 0.6em; color: #a0a0a0;">Away</span></div><span class="vs">VS</span><div class="team"><span>${game.home_team}</span><span style="font-size: 0.6em; color: #a0a0a0;">Home</span></div></div>
+                            <div class="prediction"><div>Predicted Winner: <span class="prediction-winner">${game.predicted_winner}</span></div><div class="prediction-details"><span>Model Confidence: ${confidencePercent}%</span> | <span>Spread: ${game.spread_line > 0 ? '+' : ''}${game.spread_line}</span></div><div class="confidence-bar-container"><div class="confidence-bar" style="width: ${confidencePercent}%;"></div></div></div>
                         `;
                         gameList.appendChild(card);
                     });
                 })
                 .catch(error => {
                     console.error('Error fetching predictions:', error);
-                    gameList.innerHTML = `<p style="text-align: center; color: #ff6b6b;">Could not load predictions. Is the server running?</p>`;
+                    gameList.innerHTML = `<p style="text-align: center; color: #ff6b6b;">Could not load predictions.</p>`;
                 });
+        };
+
+        // --- NEW: Function to update week dropdown when season changes ---
+        const handleSeasonChange = () => {
+            const seasonSelect = document.getElementById('season-select');
+            const weekSelect = document.getElementById('week-select');
+            const selectedSeason = seasonSelect.value;
+
+            weekSelect.innerHTML = ''; // Clear previous options
+            seasonsData[selectedSeason].forEach(week => {
+                const option = document.createElement('option');
+                option.value = week;
+                option.textContent = `Week ${week}`;
+                weekSelect.appendChild(option);
+            });
+            // Automatically fetch predictions for the first week of the selected season
+            fetchAndDisplayPredictions();
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Fetch performance stats (no change here)
+            const performanceContainer = document.getElementById('performance-summary');
+            fetch('/get_performance_stats').then(response => response.json()).then(stats => {
+                performanceContainer.innerHTML = `<h2>Model Performance (Historical)</h2><div class="stats-container"><div class="stat"><span class="stat-value">${stats.accuracy}</span><span class="stat-label">Prediction Accuracy</span></div><div class="stat"><span class="stat-value">${stats.simulated_roi}</span><span class="stat-label">Simulated ROI</span></div><div class="stat"><span class="stat-value">${stats.total_games_tested}</span><span class="stat-label">Games Tested</span></div></div>`;
+            }).catch(error => { console.error('Error fetching performance stats:', error); performanceContainer.innerHTML = '<h2>Model Performance (Historical)</h2><p>Could not load stats.</p>'; });
+
+            // --- NEW: Fetch and populate the season/week dropdowns ---
+            const seasonSelect = document.getElementById('season-select');
+            fetch('/get_seasons_weeks').then(response => response.json()).then(data => {
+                seasonsData = data;
+                seasonSelect.innerHTML = ''; // Clear "Loading..."
+                Object.keys(seasonsData).forEach(season => {
+                    const option = document.createElement('option');
+                    option.value = season;
+                    option.textContent = `${season} Season`;
+                    seasonSelect.appendChild(option);
+                });
+                // After populating seasons, trigger the first population of the week dropdown
+                handleSeasonChange();
+            }).catch(error => { console.error('Error fetching seasons:', error); seasonSelect.innerHTML = '<option>Error loading seasons</option>'; });
         });
     </script>
 </body>

@@ -1,101 +1,87 @@
 import pandas as pd
 import os
 
-# This block makes file paths work correctly from the scripts folder.
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.normpath(os.path.join(SCRIPT_DIR, '..'))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
-WEEKLY_DATA_PATH = os.path.join(DATA_DIR, "player_stats.csv")
+GAMES_PATH = os.path.join(DATA_DIR, "games.csv")
+PLAYER_STATS_PATH = os.path.join(DATA_DIR, "player_stats.csv")
 OUTPUT_PATH = os.path.join(DATA_DIR, "team_weekly_averages.csv")
 
 def prepare_data():
     """
-    Reads the raw weekly player data and transforms it into clean,
-    season-to-date weekly averages for each team.
+    Reads raw player and schedule data, calculates season-to-date rolling averages,
+    and forward-fills these averages for future, unplayed weeks.
     """
     print("--- Starting Team Stat Preparation ---")
 
     try:
-        # Load the file, using low_memory=False to prevent data type warnings.
-        df = pd.read_csv(WEEKLY_DATA_PATH, low_memory=False)
-        print("Successfully loaded raw player_stats.csv")
-    except FileNotFoundError:
-        print(f"Error: '{WEEKLY_DATA_PATH}' not found.")
+        player_stats_df = pd.read_csv(PLAYER_STATS_PATH, low_memory=False)
+        games_df = pd.read_csv(GAMES_PATH)
+        print("Successfully loaded raw data files.")
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
         print("Please run 'python scripts/update_data.py' first.")
         return
 
-    # Define the raw player stats we need to aggregate.
+    # --- 1. Aggregate Player Stats to Team-per-Game Level ---
     stats_to_aggregate = {
-        'passing_yards': 'sum',
-        'rushing_yards': 'sum',
-        'passing_tds': 'sum',
-        'rushing_tds': 'sum',
-        'passing_interceptions': 'sum', # Corrected name
-        'sack_fumbles_lost': 'sum',
-        'rushing_fumbles_lost': 'sum',
-        'receiving_fumbles_lost': 'sum'
+        'passing_yards': 'sum', 'rushing_yards': 'sum', 'passing_tds': 'sum',
+        'rushing_tds': 'sum', 'passing_interceptions': 'sum', 'sack_fumbles_lost': 'sum',
+        'rushing_fumbles_lost': 'sum', 'receiving_fumbles_lost': 'sum'
     }
-    
-    # Use the correct column names for team and opponent from the new dataset.
     grouping_cols = ['team', 'opponent_team', 'season', 'week']
-    
-    # Select only the columns we need to make the process faster.
-    df_subset = df[grouping_cols + list(stats_to_aggregate.keys())]
-
-    # Aggregate player stats up to the team-game level.
+    df_subset = player_stats_df[grouping_cols + list(stats_to_aggregate.keys())]
     team_game_stats = df_subset.groupby(grouping_cols).agg(stats_to_aggregate).reset_index()
-    print("Aggregated player stats to team-per-game stats.")
 
-    # Calculate combined offensive and defensive metrics for each game.
+    # --- 2. Calculate Custom & Defensive Metrics ---
     team_game_stats['offensive_yards'] = team_game_stats['passing_yards'] + team_game_stats['rushing_yards']
     team_game_stats['offensive_tds'] = team_game_stats['passing_tds'] + team_game_stats['rushing_tds']
-    # Combine all relevant turnover stats.
     team_game_stats['turnovers'] = team_game_stats['passing_interceptions'] + team_game_stats['sack_fumbles_lost'] + team_game_stats['rushing_fumbles_lost'] + team_game_stats['receiving_fumbles_lost']
+    merged_df = pd.merge(team_game_stats, team_game_stats, left_on=['team', 'season', 'week'], right_on=['opponent_team', 'season', 'week'], suffixes=('', '_allowed'))
     
-    # To get defensive stats (e.g., yards ALLOWED), we merge the data with itself.
-    merged_df = pd.merge(
-        team_game_stats,
-        team_game_stats,
-        left_on=['team', 'season', 'week'],
-        right_on=['opponent_team', 'season', 'week'],
-        suffixes=('', '_allowed')
-    )
-    
-    final_cols = [
-        'team', 'season', 'week',
-        'offensive_yards', 'offensive_tds', 'turnovers',
-        'offensive_yards_allowed', 'offensive_tds_allowed', 'turnovers_allowed'
-    ]
-    team_game_stats = merged_df[final_cols]
-    print("Calculated offensive and defensive stats for each game.")
+    cols_to_keep = ['team', 'season', 'week', 'offensive_yards', 'offensive_tds', 'turnovers', 'offensive_yards_allowed', 'offensive_tds_allowed', 'turnovers_allowed']
+    processed_stats = merged_df[cols_to_keep]
+    print("Aggregated and processed per-game stats.")
 
-    # Calculate season-to-date rolling averages for each stat.
-    team_game_stats = team_game_stats.sort_values(by=['team', 'season', 'week'])
+    # --- 3. Create a Full Season Schedule for Every Team ---
+    # This is the key to our fix. We create a template of every game a team plays in a season.
+    home_teams = games_df[['season', 'week', 'home_team']].rename(columns={'home_team': 'team'})
+    away_teams = games_df[['season', 'week', 'away_team']].rename(columns={'away_team': 'team'})
+    full_schedule = pd.concat([home_teams, away_teams]).drop_duplicates().sort_values(['team', 'season', 'week'])
+
+    # --- 4. Merge Stats with the Full Schedule ---
+    # This creates a complete dataset with stats for past games and empty rows for future games.
+    final_df = pd.merge(full_schedule, processed_stats, on=['team', 'season', 'week'], how='left')
+
+    # --- 5. Calculate Rolling Averages ---
+    stats_to_average = ['offensive_yards', 'offensive_tds', 'turnovers', 'offensive_yards_allowed', 'offensive_tds_allowed', 'turnovers_allowed']
+    final_df = final_df.sort_values(by=['team', 'season', 'week'])
     
-    stats_to_average = [
-        'offensive_yards', 'offensive_tds', 'turnovers',
-        'offensive_yards_allowed', 'offensive_tds_allowed', 'turnovers_allowed'
-    ]
-    
-    rolling_averages = team_game_stats.groupby(['team', 'season'])[stats_to_average].apply(
-        # The shift(1) ensures we're calculating the average *before* the current week's game.
+    # We add 'group_keys=False' to silence the FutureWarning you saw earlier.
+    rolling_averages = final_df.groupby(['team', 'season'], group_keys=False)[stats_to_average].apply(
         lambda x: x.expanding().mean().shift(1)
     )
     
-    final_df = pd.concat([team_game_stats[['team', 'season', 'week']], rolling_averages], axis=1)
+    # --- 6. Forward-Fill for Future Weeks ---
+    # After calculating the averages, we fill the empty future weeks with the last known good average.
+    final_df[stats_to_average] = rolling_averages
+    final_df[stats_to_average] = final_df.groupby(['team', 'season'], group_keys=False)[stats_to_average].fillna(method='ffill')
     
-    # Rename columns for our final, clean file.
-    final_df.columns = [
-        'team', 'season', 'week', 'avg_off_yards', 'avg_off_tds', 'avg_turnovers',
-        'avg_def_yards_allowed', 'avg_def_tds_allowed', 'avg_def_turnovers_forced'
-    ]
-    print("Calculated season-to-date rolling averages.")
+    print("Calculated and forward-filled rolling averages.")
+
+    # --- 7. Save the Clean Data ---
+    final_df.rename(columns={
+        'offensive_yards': 'avg_off_yards', 'offensive_tds': 'avg_off_tds', 'turnovers': 'avg_turnovers',
+        'offensive_yards_allowed': 'avg_def_yards_allowed', 'offensive_tds_allowed': 'avg_def_tds_allowed', 'turnovers_allowed': 'avg_def_turnovers_forced'
+    }, inplace=True)
     
-    # Save the final, processed data.
+    final_df = final_df[['team', 'season', 'week', 'avg_off_yards', 'avg_off_tds', 'avg_turnovers', 'avg_def_yards_allowed', 'avg_def_tds_allowed', 'avg_def_turnovers_forced']]
+    
     final_df.to_csv(OUTPUT_PATH, index=False)
     print(f"--- Successfully saved clean data to '{OUTPUT_PATH}' ---")
 
-
 if __name__ == "__main__":
     prepare_data()
+

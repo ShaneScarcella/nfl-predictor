@@ -30,6 +30,10 @@ def get_current_week_info():
 
 @app.route('/custom_predict', methods=['POST'])
 def custom_predict():
+    """
+    Takes user-defined weights and predicts a winner using a
+    proportional distribution scoring algorithm.
+    """
     if team_avg_stats_df.empty:
         return jsonify({'error': 'Team average stats not loaded.'})
 
@@ -37,31 +41,54 @@ def custom_predict():
     home_team, away_team, season, week = data.get('home_team'), data.get('away_team'), data.get('season'), data.get('week')
     weights = data.get('weights')
 
-    home_stats = team_avg_stats_df[(team_avg_stats_df['team'] == home_team) & (team_avg_stats_df['season'] == season) & (team_avg_stats_df['week'] == week)]
-    away_stats = team_avg_stats_df[(team_avg_stats_df['team'] == away_team) & (team_avg_stats_df['season'] == season) & (team_avg_stats_df['week'] == week)]
+    home_stats = team_avg_stats_df[(team_avg_stats_df['team'] == home_team) & (team_avg_stats_df['season'] == season) & (team_avg_stats_df['week'] == week)].iloc[0]
+    away_stats = team_avg_stats_df[(team_avg_stats_df['team'] == away_team) & (team_avg_stats_df['season'] == season) & (team_avg_stats_df['week'] == week)].iloc[0]
 
-    if home_stats.empty or away_stats.empty or home_stats.isnull().values.any() or away_stats.isnull().values.any():
+    if pd.isna(home_stats['avg_off_yards']) or pd.isna(away_stats['avg_off_yards']):
         return jsonify({'error': 'Cannot generate predictions for Week 1 as there is no prior game data for this season. Please select Week 2 or later.'})
 
-    home_score, away_score = 0, 0
+    home_score, away_score = 0.0, 0.0
     breakdown = []
 
-    if home_stats['avg_off_yards'].iloc[0] > away_stats['avg_off_yards'].iloc[0]:
-        home_score += weights['offense']; breakdown.append(f"+{weights['offense']} to {home_team} for more yards/game")
-    else:
-        away_score += weights['offense']; breakdown.append(f"+{weights['offense']} to {away_team} for more yards/game")
-    if home_stats['avg_def_yards_allowed'].iloc[0] < away_stats['avg_def_yards_allowed'].iloc[0]:
-        home_score += weights['defense']; breakdown.append(f"+{weights['defense']} to {home_team} for fewer yards allowed/game")
-    else:
-        away_score += weights['defense']; breakdown.append(f"+{weights['defense']} to {away_team} for fewer yards allowed/game")
-    if home_stats['avg_turnovers'].iloc[0] < away_stats['avg_turnovers'].iloc[0]:
-        home_score += weights['turnovers']; breakdown.append(f"+{weights['turnovers']} to {home_team} for fewer turnovers/game")
-    else:
-        away_score += weights['turnovers']; breakdown.append(f"+{weights['turnovers']} to {away_team} for fewer turnovers/game")
+    # 1. Offensive Yards (higher is better)
+    total_off_yards = home_stats['avg_off_yards'] + away_stats['avg_off_yards']
+    if total_off_yards > 0:
+        home_off_share = home_stats['avg_off_yards'] / total_off_yards
+        away_off_share = away_stats['avg_off_yards'] / total_off_yards
+        home_score += weights['offense'] * home_off_share
+        away_score += weights['offense'] * away_off_share
+        breakdown.append(f"Offense: {home_team} gets {home_off_share:.1%} of points, {away_team} gets {away_off_share:.1%}")
 
+    # 2. Defensive Yards (lower is better)
+    total_def_yards = home_stats['avg_def_yards_allowed'] + away_stats['avg_def_yards_allowed']
+    if total_def_yards > 0:
+        # A team's "good" share is the inverse of their "bad" share (yards allowed).
+        home_def_share = away_stats['avg_def_yards_allowed'] / total_def_yards
+        away_def_share = home_stats['avg_def_yards_allowed'] / total_def_yards
+        home_score += weights['defense'] * home_def_share
+        away_score += weights['defense'] * away_def_share
+        breakdown.append(f"Defense: {home_team} gets {home_def_share:.1%} of points, {away_team} gets {away_def_share:.1%}")
+
+    # 3. Turnovers (lower is better)
+    total_turnovers = home_stats['avg_turnovers'] + away_stats['avg_turnovers']
+    if total_turnovers > 0:
+        # Same inverse logic as defense.
+        home_to_share = away_stats['avg_turnovers'] / total_turnovers
+        away_to_share = home_stats['avg_turnovers'] / total_turnovers
+        home_score += weights['turnovers'] * home_to_share
+        away_score += weights['turnovers'] * away_to_share
+        breakdown.append(f"Turnovers: {home_team} gets {home_to_share:.1%} of points, {away_team} gets {away_to_share:.1%}")
+
+    # Determine winner and round scores for display.
     winner = home_team if home_score > away_score else away_team
     if home_score == away_score: winner = "It's a tie!"
-    return jsonify({'winner': winner, 'home_score': home_score, 'away_score': away_score, 'breakdown': breakdown})
+    
+    return jsonify({
+        'winner': winner,
+        'home_score': round(home_score, 1),
+        'away_score': round(away_score, 1),
+        'breakdown': breakdown
+    })
 
 @app.route('/')
 def home(): return render_template('index.html')

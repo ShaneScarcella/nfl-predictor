@@ -11,11 +11,14 @@ try:
     games_df = pd.read_csv('data/games.csv', sep=r'\s*,\s*', engine='python')
     games_df.columns = games_df.columns.str.strip()
     team_avg_stats_df = pd.read_csv('data/team_weekly_averages.csv')
+
+    logos_df = pd.read_csv('data/team_logos.csv')
+    # Convert logos into a dictionary (e.g., {'ARI': 'url_to_logo.png'}).
+    team_logos = logos_df.set_index('team')['team_logo'].to_dict()
+
 except FileNotFoundError as e:
     print(f"Error loading data files: {e}")
-    print("Please make sure you have run both 'scripts/update_data.py' and 'scripts/prepare_team_stats.py'")
-    games_df = pd.DataFrame()
-    team_avg_stats_df = pd.DataFrame()
+    games_df, team_avg_stats_df, team_logos = pd.DataFrame(), pd.DataFrame(), {}
 
 
 @app.route('/get_current_week_info')
@@ -154,7 +157,17 @@ def get_predictions():
     output_data = []
     for _, row in target_games.iterrows():
         predicted_winner = row['home_team'] if row['prediction'] == 1 else row['away_team']
-        output_data.append({ 'home_team': row['home_team'], 'away_team': row['away_team'], 'predicted_winner': predicted_winner, 'spread_line': row['spread_line'], 'confidence': row['win_probability'] })
+        output_data.append({
+            'home_team': row['home_team'],
+            'away_team': row['away_team'],
+            'predicted_winner': predicted_winner,
+            'spread_line': row['spread_line'],
+            'confidence': row['win_probability'],
+            'home_logo': team_logos.get(row['home_team']),
+            'away_logo': team_logos.get(row['away_team'])
+        })
     return jsonify({'predictions': output_data, 'weekly_stats': weekly_stats})
+
+
 if __name__ == '__main__': app.run(debug=True)
 

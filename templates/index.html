@@ -15,7 +15,6 @@
             margin: 0; padding: 24px; display: flex; justify-content: center;
         }
         .container { width: 100%; max-width: 800px; }
-        header { text-align: center; border-bottom: 1px solid #333; padding-bottom: 16px; margin-bottom: 24px; }
         h1, h2, h3 { color: #ffffff; margin: 0; }
         p { color: var(--secondary-text); }
         .tab-nav { display: flex; justify-content: center; margin-bottom: 24px; background-color: var(--light-bg); border-radius: 12px; padding: 5px; }
@@ -36,37 +35,25 @@
         .loader { text-align: center; font-size: 1.2em; padding: 40px; }
         .teams { display: flex; justify-content: space-between; align-items: center; font-size: 1.5em; font-weight: bold; margin-bottom: 16px; }
         .team { display: flex; flex-direction: column; align-items: center; width: 40%; }
+        .team img { width: 60px; height: 60px; object-fit: contain; margin-bottom: 8px; }
         .vs { color: #666; font-size: 0.8em; }
         .weekly-header { text-align: center; margin-bottom: 20px; }
         .ai-prediction-summary { text-align: center; padding: 12px; border-radius: 8px; background-color: var(--light-bg); }
         .ai-winner { font-weight: bold; font-size: 1.2em; color: var(--accent-color); }
-        .details-button {
-            margin-top: 12px; background-color: #444; color: #fff; border: none; padding: 8px 16px;
-            border-radius: 6px; cursor: pointer; font-weight: bold;
-        }
+        .details-button { margin-top: 12px; background-color: #444; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; }
         .slider-section { margin-top: 20px; padding-top: 20px; border-top: 1px solid #444; }
         .slider-group { margin-bottom: 15px; }
         .slider-group label { display: block; margin-bottom: 5px; font-weight: bold; }
         .slider-group input[type="range"] { width: 100%; }
-        .custom-predict-button {
-            width: 100%; padding: 12px; margin-top: 16px; background-color: var(--accent-color); color: #fff;
-            border: none; border-radius: 8px; font-size: 1.1em; font-weight: bold; cursor: pointer;
-        }
-        .modal {
-            display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%;
-            overflow: auto; background-color: rgba(0,0,0,0.6);
-        }
-        .modal-content {
-            background-color: var(--medium-bg); margin: 15% auto; padding: 20px; border: 1px solid #888;
-            width: 90%; max-width: 500px; border-radius: 12px; text-align: center;
-        }
+        .custom-predict-button { width: 100%; padding: 12px; margin-top: 16px; background-color: var(--accent-color); color: #fff; border: none; border-radius: 8px; font-size: 1.1em; font-weight: bold; cursor: pointer; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); }
+        .modal-content { background-color: var(--medium-bg); margin: 15% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 12px; text-align: center; }
         .modal-close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
     <div class="container">
         <header><h1>NFL Predictor Pro</h1></header>
-
         <nav class="tab-nav">
             <button class="tab-button active" onclick="showTab('ai-model')">AI Model Predictor</button>
             <button class="tab-button" onclick="showTab('custom-engine')">Custom Matchup Engine</button>
@@ -88,9 +75,9 @@
                 <h2>Build Your Own Prediction</h2>
                 <p>Adjust the sliders to weigh each factor based on your football philosophy.</p>
                 <div class="slider-section">
-                    <div class="slider-group"><label for="offense-slider">Offensive Power (Yards/Game)</label><input type="range" id="offense-slider" min="0" max="100" value="50"></div>
-                    <div class="slider-group"><label for="defense-slider">Defensive Strength (Yards Allowed/Game)</label><input type="range" id="defense-slider" min="0" max="100" value="50"></div>
-                    <div class="slider-group"><label for="turnovers-slider">Turnover Battle (Turnovers/Game)</label><input type="range" id="turnovers-slider" min="0" max="100" value="50"></div>
+                    <div class="slider-group"><label for="offense-slider">Offensive Power</label><input type="range" id="offense-slider" min="0" max="100" value="50"></div>
+                    <div class="slider-group"><label for="defense-slider">Defensive Strength</label><input type="range" id="defense-slider" min="0" max="100" value="50"></div>
+                    <div class="slider-group"><label for="turnovers-slider">Turnover Battle</label><input type="range" id="turnovers-slider" min="0" max="100" value="50"></div>
                 </div>
             </div>
             <h2 id="custom-weekly-header" class="weekly-header"></h2>
@@ -98,12 +85,11 @@
         </div>
     </div>
 
-    <div id="details-modal" class="modal">
-        <div class="modal-content"><span class="modal-close" onclick="closeModal()">&times;</span><div id="modal-body"></div></div>
-    </div>
+    <div id="details-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeModal()">&times;</span><div id="modal-body"></div></div></div>
 
     <script>
         let seasonsData = {};
+        let weeklyMatchups = []; // Store the matchups globally to share between tabs.
         const modal = document.getElementById('details-modal');
         const modalBody = document.getElementById('modal-body');
         
@@ -112,69 +98,71 @@
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
             document.querySelector(`.tab-button[onclick="showTab('${tabId}')"]`).classList.add('active');
-            onWeekChange(); 
+            onWeekChange();
         };
 
         const fetchAIPredictions = () => {
-            const season = document.getElementById('season-select').value;
-            const week = document.getElementById('week-select').value;
-            const gameList = document.getElementById('game-list');
-            const weeklySummary = document.getElementById('weekly-summary');
-            const weeklyHeader = document.getElementById('ai-weekly-header');
+            const season = document.getElementById('season-select').value, week = document.getElementById('week-select').value;
+            const gameList = document.getElementById('game-list'), weeklySummary = document.getElementById('weekly-summary'), weeklyHeader = document.getElementById('ai-weekly-header');
             if (!season || !week) return;
             weeklyHeader.textContent = `Predictions for ${season} - Week ${week}`;
             gameList.innerHTML = `<div class="loader">Loading AI predictions...</div>`;
             weeklySummary.style.display = 'none';
             fetch(`/get_predictions?season=${season}&week=${week}`).then(res => res.json()).then(data => {
                 gameList.innerHTML = '';
+                weeklyMatchups = data.predictions; // Save matchups for the other tab.
                 if (data.weekly_stats && data.weekly_stats.record) {
                     weeklySummary.innerHTML = `<h3>Results for ${season} - Week ${week}</h3><div class="stats-container"><div class="stat"><span class="stat-value">${data.weekly_stats.record}</span><span class="stat-label">Record</span></div><div class="stat"><span class="stat-value">${data.weekly_stats.accuracy}</span><span class="stat-label">Accuracy</span></div><div class="stat"><span class="stat-value">${data.weekly_stats.roi}</span><span class="stat-label">Simulated ROI</span></div></div>`;
                     weeklySummary.style.display = 'block';
                 }
-                data.predictions.forEach(game => {
+                weeklyMatchups.forEach(game => {
                     const card = document.createElement('div');
                     card.className = 'game-card';
-                    card.innerHTML = `<div class="teams"><div class="team"><span>${game.away_team}</span></div><span class="vs">VS</span><div class="team"><span>${game.home_team}</span></div></div><div class="ai-prediction-summary"><div>AI Predicted Winner: <span class="ai-winner">${game.predicted_winner}</span></div><button class="details-button" onclick='showAIDetails(${JSON.stringify(game)})'>Show Details</button></div>`;
+                    card.innerHTML = `
+                        <div class="teams">
+                            <div class="team"><img src="${game.away_logo}" alt="${game.away_team} logo" onerror="this.style.display='none'"><span>${game.away_team}</span></div>
+                            <span class="vs">VS</span>
+                            <div class="team"><img src="${game.home_logo}" alt="${game.home_team} logo" onerror="this.style.display='none'"><span>${game.home_team}</span></div>
+                        </div>
+                        <div class="ai-prediction-summary"><div>AI Predicted Winner: <span class="ai-winner">${game.predicted_winner}</span></div><button class="details-button" onclick='showAIDetails(${JSON.stringify(game)})'>Show Details</button></div>
+                    `;
                     gameList.appendChild(card);
                 });
-                populateCustomGames();
+                populateCustomGames(); // Automatically update the other tab now that we have the data.
             });
         };
         
         const populateCustomGames = () => {
-            const season = document.getElementById('season-select').value;
-            const week = document.getElementById('week-select').value;
-            const customGameList = document.getElementById('custom-game-list');
-            const weeklyHeader = document.getElementById('custom-weekly-header');
+            const season = document.getElementById('season-select').value, week = document.getElementById('week-select').value;
+            const customGameList = document.getElementById('custom-game-list'), weeklyHeader = document.getElementById('custom-weekly-header');
             if (!season || !week) return;
             weeklyHeader.textContent = `Matchups for ${season} - Week ${week}`;
-
             if (parseInt(week) === 1) {
                 customGameList.innerHTML = `<div class="dashboard"><p>The Custom Matchup Engine requires prior game data. Please select Week 2 or later to build predictions.</p></div>`;
                 return;
             }
-
-            const modelGames = document.getElementById('game-list').querySelectorAll('.game-card');
             customGameList.innerHTML = '';
-            if (modelGames.length === 0) {
-                customGameList.innerHTML = `<div class="loader">Loading matchups...</div>`;
-                setTimeout(populateCustomGames, 500); 
-                return;
+            if (weeklyMatchups.length === 0) {
+                customGameList.innerHTML = `<div class="loader">Loading matchups...</div>`; return;
             }
-            modelGames.forEach(gameCard => {
-                const awayTeam = gameCard.querySelector('.teams .team:first-child span').textContent;
-                const homeTeam = gameCard.querySelector('.teams .team:last-child span').textContent;
+            weeklyMatchups.forEach(game => {
                 const newCard = document.createElement('div');
                 newCard.className = 'game-card';
-                newCard.innerHTML = `<div class="teams"><div class="team"><span>${awayTeam}</span></div><span class="vs">VS</span><div class="team"><span>${homeTeam}</span></div></div><button class="custom-predict-button" onclick="runCustomPrediction('${homeTeam}', '${awayTeam}', ${season}, ${week})">Build & Predict</button>`;
+                newCard.innerHTML = `
+                    <div class="teams">
+                        <div class="team"><img src="${game.away_logo}" alt="${game.away_team} logo" onerror="this.style.display='none'"><span>${game.away_team}</span></div>
+                        <span class="vs">VS</span>
+                        <div class="team"><img src="${game.home_logo}" alt="${game.home_team} logo" onerror="this.style.display='none'"><span>${game.home_team}</span></div>
+                    </div>
+                    <button class="custom-predict-button" onclick="runCustomPrediction('${game.home_team}', '${game.away_team}', ${season}, ${week})">Build & Predict</button>
+                `;
                 customGameList.appendChild(newCard);
             });
         };
 
         const runCustomPrediction = (homeTeam, awayTeam, season, week) => {
             const weights = { offense: parseInt(document.getElementById('offense-slider').value), defense: parseInt(document.getElementById('defense-slider').value), turnovers: parseInt(document.getElementById('turnovers-slider').value) };
-            modalBody.innerHTML = `<div class="loader">Calculating...</div>`;
-            openModal();
+            modalBody.innerHTML = `<div class="loader">Calculating...</div>`; openModal();
             fetch('/custom_predict', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ home_team: homeTeam, away_team: awayTeam, season, week, weights }) })
             .then(res => res.json()).then(result => {
                 if (result.error) { modalBody.innerHTML = `<h3>Error</h3><p>${result.error}</p>`; return; }
@@ -192,11 +180,7 @@
             openModal();
         };
 
-        const onWeekChange = () => {
-            if (document.getElementById('ai-model').classList.contains('active')) { fetchAIPredictions(); }
-            else { populateCustomGames(); }
-        };
-
+        const onWeekChange = () => { fetchAIPredictions(); };
         const handleSeasonChange = () => {
             const season = document.getElementById('season-select').value;
             const weekSelect = document.getElementById('week-select');
@@ -227,9 +211,7 @@
                 seasonSelect.value = currentWeekInfo.season;
                 handleSeasonChange(); 
                 document.getElementById('week-select').value = currentWeekInfo.week;
-            } else {
-                handleSeasonChange();
-            }
+            } else { handleSeasonChange(); }
             fetchAIPredictions();
         });
     </script>

@@ -15,13 +15,10 @@
             margin: 0; padding: 24px; display: flex; justify-content: center;
         }
         .container { width: 100%; max-width: 800px; }
-        h1, h2, h3 { color: #ffffff; margin: 0; }
+        h1, h2, h3, h4 { color: #ffffff; margin: 0; }
         p { color: var(--secondary-text); }
         .tab-nav { display: flex; justify-content: center; margin-bottom: 24px; background-color: var(--light-bg); border-radius: 12px; padding: 5px; }
-        .tab-button {
-            flex: 1; text-align: center; padding: 12px 20px; border: none; background-color: transparent; color: var(--secondary-text);
-            font-size: 1em; font-weight: bold; cursor: pointer; border-radius: 8px; transition: background-color 0.3s, color 0.3s;
-        }
+        .tab-button { flex: 1; text-align: center; padding: 12px 20px; border: none; background-color: transparent; color: var(--secondary-text); font-size: 1em; font-weight: bold; cursor: pointer; border-radius: 8px; transition: background-color 0.3s, color 0.3s; }
         .tab-button.active { background-color: var(--accent-color); color: #fff; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
@@ -47,8 +44,15 @@
         .slider-group input[type="range"] { width: 100%; }
         .custom-predict-button { width: 100%; padding: 12px; margin-top: 16px; background-color: var(--accent-color); color: #fff; border: none; border-radius: 8px; font-size: 1.1em; font-weight: bold; cursor: pointer; }
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); }
-        .modal-content { background-color: var(--medium-bg); margin: 15% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 12px; text-align: center; }
+        .modal-content { background-color: var(--medium-bg); margin: 10% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 600px; border-radius: 12px; text-align: center; }
         .modal-close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .breakdown-container { text-align: left; margin-top: 20px; }
+        .breakdown-row { margin-bottom: 15px; }
+        .breakdown-row h5 { margin: 0 0 8px 0; text-align: center; }
+        .breakdown-stats { display: flex; justify-content: space-between; align-items: center; font-size: 0.9em; }
+        .breakdown-bar { flex-grow: 1; height: 12px; background-color: var(--light-bg); display: flex; margin: 0 10px; border-radius: 6px; overflow: hidden; }
+        .breakdown-bar-home { background-color: #3b82f6; height: 100%; }
+        .breakdown-bar-away { background-color: #ef4444; height: 100%; }
     </style>
 </head>
 <body>
@@ -89,16 +93,61 @@
 
     <script>
         let seasonsData = {};
-        let weeklyMatchups = []; // Store the matchups globally to share between tabs.
+        let weeklyMatchups = [];
         const modal = document.getElementById('details-modal');
         const modalBody = document.getElementById('modal-body');
         
+        const runCustomPrediction = (homeTeam, awayTeam, season, week) => {
+            const weights = { offense: parseInt(document.getElementById('offense-slider').value), defense: parseInt(document.getElementById('defense-slider').value), turnovers: parseInt(document.getElementById('turnovers-slider').value) };
+            modalBody.innerHTML = `<div class="loader">Calculating...</div>`;
+            openModal();
+            fetch('/custom_predict', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ home_team: homeTeam, away_team: awayTeam, season, week, weights }) })
+            .then(res => res.json()).then(result => {
+                if (result.error) {
+                    modalBody.innerHTML = `<h3>Error</h3><p>${result.error}</p>`;
+                    return;
+                }
+                
+                // Build the new, detailed breakdown HTML.
+                let breakdownHtml = '<div class="breakdown-container">';
+                result.breakdown.forEach(item => {
+                    breakdownHtml += `
+                        <div class="breakdown-row">
+                            <h5>${item.cat}</h5>
+                            <div class="breakdown-stats">
+                                <span>${item.a_val}</span>
+                                <div class="breakdown-bar">
+                                    <div class="breakdown-bar-away" style="width: ${item.a_share * 100}%"></div>
+                                    <div class="breakdown-bar-home" style="width: ${item.h_share * 100}%"></div>
+                                </div>
+                                <span>${item.h_val}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                breakdownHtml += '</div>';
+
+                modalBody.innerHTML = `
+                    <h3>Custom Prediction Result</h3>
+                    <div class="teams">
+                        <div class="team"><span>${awayTeam}</span><h4>${result.away_score}</h4></div>
+                        <span class="vs">FINAL SCORE</span>
+                        <div class="team"><span>${homeTeam}</span><h4>${result.home_score}</h4></div>
+                    </div>
+                    <hr>
+                    <h4>Predicted Winner: <span style="color:var(--accent-color)">${result.winner}</span></h4>
+                    <h4>Scoring Breakdown:</h4>
+                    ${breakdownHtml}
+                `;
+            });
+        };
+
         const showTab = (tabId) => {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
             document.querySelector(`.tab-button[onclick="showTab('${tabId}')"]`).classList.add('active');
-            onWeekChange();
+            onWeekChange(); 
         };
 
         const fetchAIPredictions = () => {
@@ -110,7 +159,7 @@
             weeklySummary.style.display = 'none';
             fetch(`/get_predictions?season=${season}&week=${week}`).then(res => res.json()).then(data => {
                 gameList.innerHTML = '';
-                weeklyMatchups = data.predictions; // Save matchups for the other tab.
+                weeklyMatchups = data.predictions;
                 if (data.weekly_stats && data.weekly_stats.record) {
                     weeklySummary.innerHTML = `<h3>Results for ${season} - Week ${week}</h3><div class="stats-container"><div class="stat"><span class="stat-value">${data.weekly_stats.record}</span><span class="stat-label">Record</span></div><div class="stat"><span class="stat-value">${data.weekly_stats.accuracy}</span><span class="stat-label">Accuracy</span></div><div class="stat"><span class="stat-value">${data.weekly_stats.roi}</span><span class="stat-label">Simulated ROI</span></div></div>`;
                     weeklySummary.style.display = 'block';
@@ -118,20 +167,13 @@
                 weeklyMatchups.forEach(game => {
                     const card = document.createElement('div');
                     card.className = 'game-card';
-                    card.innerHTML = `
-                        <div class="teams">
-                            <div class="team"><img src="${game.away_logo}" alt="${game.away_team} logo" onerror="this.style.display='none'"><span>${game.away_team}</span></div>
-                            <span class="vs">VS</span>
-                            <div class="team"><img src="${game.home_logo}" alt="${game.home_team} logo" onerror="this.style.display='none'"><span>${game.home_team}</span></div>
-                        </div>
-                        <div class="ai-prediction-summary"><div>AI Predicted Winner: <span class="ai-winner">${game.predicted_winner}</span></div><button class="details-button" onclick='showAIDetails(${JSON.stringify(game)})'>Show Details</button></div>
-                    `;
+                    card.innerHTML = `<div class="teams"><div class="team"><img src="${game.away_logo}" alt="${game.away_team} logo" onerror="this.style.display='none'"><span>${game.away_team}</span></div><span class="vs">VS</span><div class="team"><img src="${game.home_logo}" alt="${game.home_team} logo" onerror="this.style.display='none'"><span>${game.home_team}</span></div></div><div class="ai-prediction-summary"><div>AI Predicted Winner: <span class="ai-winner">${game.predicted_winner}</span></div><button class="details-button" onclick='showAIDetails(${JSON.stringify(game)})'>Show Details</button></div>`;
                     gameList.appendChild(card);
                 });
-                populateCustomGames(); // Automatically update the other tab now that we have the data.
+                populateCustomGames();
             });
         };
-        
+
         const populateCustomGames = () => {
             const season = document.getElementById('season-select').value, week = document.getElementById('week-select').value;
             const customGameList = document.getElementById('custom-game-list'), weeklyHeader = document.getElementById('custom-weekly-header');
@@ -148,26 +190,8 @@
             weeklyMatchups.forEach(game => {
                 const newCard = document.createElement('div');
                 newCard.className = 'game-card';
-                newCard.innerHTML = `
-                    <div class="teams">
-                        <div class="team"><img src="${game.away_logo}" alt="${game.away_team} logo" onerror="this.style.display='none'"><span>${game.away_team}</span></div>
-                        <span class="vs">VS</span>
-                        <div class="team"><img src="${game.home_logo}" alt="${game.home_team} logo" onerror="this.style.display='none'"><span>${game.home_team}</span></div>
-                    </div>
-                    <button class="custom-predict-button" onclick="runCustomPrediction('${game.home_team}', '${game.away_team}', ${season}, ${week})">Build & Predict</button>
-                `;
+                newCard.innerHTML = `<div class="teams"><div class="team"><img src="${game.away_logo}" alt="${game.away_team} logo" onerror="this.style.display='none'"><span>${game.away_team}</span></div><span class="vs">VS</span><div class="team"><img src="${game.home_logo}" alt="${game.home_team} logo" onerror="this.style.display='none'"><span>${game.home_team}</span></div></div><button class="custom-predict-button" onclick="runCustomPrediction('${game.home_team}', '${game.away_team}', ${season}, ${week})">Build & Predict</button>`;
                 customGameList.appendChild(newCard);
-            });
-        };
-
-        const runCustomPrediction = (homeTeam, awayTeam, season, week) => {
-            const weights = { offense: parseInt(document.getElementById('offense-slider').value), defense: parseInt(document.getElementById('defense-slider').value), turnovers: parseInt(document.getElementById('turnovers-slider').value) };
-            modalBody.innerHTML = `<div class="loader">Calculating...</div>`; openModal();
-            fetch('/custom_predict', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ home_team: homeTeam, away_team: awayTeam, season, week, weights }) })
-            .then(res => res.json()).then(result => {
-                if (result.error) { modalBody.innerHTML = `<h3>Error</h3><p>${result.error}</p>`; return; }
-                let breakdownHtml = '<ul>'; result.breakdown.forEach(item => { breakdownHtml += `<li>${item}</li>`; }); breakdownHtml += '</ul>';
-                modalBody.innerHTML = `<h3>Custom Prediction Result</h3><div class="teams"><div class="team"><span>${awayTeam}</span><span>${result.away_score}</span></div><span class="vs">VS</span><div class="team"><span>${homeTeam}</span><span>${result.home_score}</span></div></div><hr><h4>Predicted Winner: <span style="color:var(--accent-color)">${result.winner}</span></h4><h4>Scoring Breakdown:</h4>${breakdownHtml}`;
             });
         };
 

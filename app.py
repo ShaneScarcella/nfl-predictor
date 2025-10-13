@@ -11,35 +11,14 @@ try:
     games_df = pd.read_csv('data/games.csv', sep=r'\s*,\s*', engine='python')
     games_df.columns = games_df.columns.str.strip()
     team_avg_stats_df = pd.read_csv('data/team_weekly_averages.csv')
-
     logos_df = pd.read_csv('data/team_logos.csv')
-    # Convert logos into a dictionary (e.g., {'ARI': 'url_to_logo.png'}).
     team_logos = logos_df.set_index('team')['team_logo'].to_dict()
-
 except FileNotFoundError as e:
     print(f"Error loading data files: {e}")
     games_df, team_avg_stats_df, team_logos = pd.DataFrame(), pd.DataFrame(), {}
 
-
-@app.route('/get_current_week_info')
-def get_current_week_info():
-    try:
-        current_season = nfl.get_current_season()
-        current_week = nfl.get_current_week()
-        return jsonify({'season': current_season, 'week': current_week})
-    except Exception as e:
-        print(f"Could not determine current week automatically: {e}")
-        return jsonify({'error': 'Could not determine current week.'})
-
 @app.route('/custom_predict', methods=['POST'])
 def custom_predict():
-    """
-    Takes user-defined weights and predicts a winner using a
-    proportional distribution scoring algorithm.
-    """
-    if team_avg_stats_df.empty:
-        return jsonify({'error': 'Team average stats not loaded.'})
-
     data = request.get_json()
     home_team, away_team, season, week = data.get('home_team'), data.get('away_team'), data.get('season'), data.get('week')
     weights = data.get('weights')
@@ -48,41 +27,38 @@ def custom_predict():
     away_stats = team_avg_stats_df[(team_avg_stats_df['team'] == away_team) & (team_avg_stats_df['season'] == season) & (team_avg_stats_df['week'] == week)].iloc[0]
 
     if pd.isna(home_stats['avg_off_yards']) or pd.isna(away_stats['avg_off_yards']):
-        return jsonify({'error': 'Cannot generate predictions for Week 1 as there is no prior game data for this season. Please select Week 2 or later.'})
+        return jsonify({'error': 'Cannot generate predictions for Week 1 as there is no prior game data for this season.'})
 
     home_score, away_score = 0.0, 0.0
     breakdown = []
 
-    # 1. Offensive Yards (higher is better)
-    total_off_yards = home_stats['avg_off_yards'] + away_stats['avg_off_yards']
-    if total_off_yards > 0:
-        home_off_share = home_stats['avg_off_yards'] / total_off_yards
-        away_off_share = away_stats['avg_off_yards'] / total_off_yards
-        home_score += weights['offense'] * home_off_share
-        away_score += weights['offense'] * away_off_share
-        breakdown.append(f"Offense: {home_team} gets {home_off_share:.1%} of points, {away_team} gets {away_off_share:.1%}")
+    # Offensive Yards
+    h_stat, a_stat = home_stats['avg_off_yards'], away_stats['avg_off_yards']
+    total = h_stat + a_stat
+    if total > 0:
+        h_share, a_share = h_stat / total, a_stat / total
+        home_score += weights['offense'] * h_share
+        away_score += weights['offense'] * a_share
+        breakdown.append({'cat': 'Offense (Yds/G)', 'h_val': round(h_stat, 1), 'a_val': round(a_stat, 1), 'h_share': h_share, 'a_share': a_share})
 
-    # 2. Defensive Yards (lower is better)
-    total_def_yards = home_stats['avg_def_yards_allowed'] + away_stats['avg_def_yards_allowed']
-    if total_def_yards > 0:
-        # A team's "good" share is the inverse of their "bad" share (yards allowed).
-        home_def_share = away_stats['avg_def_yards_allowed'] / total_def_yards
-        away_def_share = home_stats['avg_def_yards_allowed'] / total_def_yards
-        home_score += weights['defense'] * home_def_share
-        away_score += weights['defense'] * away_def_share
-        breakdown.append(f"Defense: {home_team} gets {home_def_share:.1%} of points, {away_team} gets {away_def_share:.1%}")
+    # Defensive Yards
+    h_stat, a_stat = home_stats['avg_def_yards_allowed'], away_stats['avg_def_yards_allowed']
+    total = h_stat + a_stat
+    if total > 0:
+        h_share, a_share = a_stat / total, h_stat / total # Inverted for "lower is better"
+        home_score += weights['defense'] * h_share
+        away_score += weights['defense'] * a_share
+        breakdown.append({'cat': 'Defense (Yds Allow/G)', 'h_val': round(h_stat, 1), 'a_val': round(a_stat, 1), 'h_share': h_share, 'a_share': a_share})
 
-    # 3. Turnovers (lower is better)
-    total_turnovers = home_stats['avg_turnovers'] + away_stats['avg_turnovers']
-    if total_turnovers > 0:
-        # Same inverse logic as defense.
-        home_to_share = away_stats['avg_turnovers'] / total_turnovers
-        away_to_share = home_stats['avg_turnovers'] / total_turnovers
-        home_score += weights['turnovers'] * home_to_share
-        away_score += weights['turnovers'] * away_to_share
-        breakdown.append(f"Turnovers: {home_team} gets {home_to_share:.1%} of points, {away_team} gets {away_to_share:.1%}")
+    # Turnovers
+    h_stat, a_stat = home_stats['avg_turnovers'], away_stats['avg_turnovers']
+    total = h_stat + a_stat
+    if total > 0:
+        h_share, a_share = a_stat / total, h_stat / total # Inverted for "lower is better"
+        home_score += weights['turnovers'] * h_share
+        away_score += weights['turnovers'] * a_share
+        breakdown.append({'cat': 'Turnovers (Per Game)', 'h_val': round(h_stat, 2), 'a_val': round(a_stat, 2), 'h_share': h_share, 'a_share': a_share})
 
-    # Determine winner and round scores for display.
     winner = home_team if home_score > away_score else away_team
     if home_score == away_score: winner = "It's a tie!"
     
@@ -98,6 +74,14 @@ def home(): return render_template('index.html')
 def calculate_profit(odds, bet_amount):
     if odds < 0: return (100 / abs(odds)) * bet_amount
     else: return (odds / 100) * bet_amount
+
+@app.route('/get_current_week_info')
+def get_current_week_info():
+    try:
+        current_season = nfl.get_current_season(); current_week = nfl.get_current_week()
+        return jsonify({'season': current_season, 'week': current_week})
+    except Exception as e:
+        return jsonify({'error': f'Could not determine current week: {e}'})
     
 @app.route('/get_performance_stats')
 def get_performance_stats():
@@ -157,17 +141,8 @@ def get_predictions():
     output_data = []
     for _, row in target_games.iterrows():
         predicted_winner = row['home_team'] if row['prediction'] == 1 else row['away_team']
-        output_data.append({
-            'home_team': row['home_team'],
-            'away_team': row['away_team'],
-            'predicted_winner': predicted_winner,
-            'spread_line': row['spread_line'],
-            'confidence': row['win_probability'],
-            'home_logo': team_logos.get(row['home_team']),
-            'away_logo': team_logos.get(row['away_team'])
-        })
+        output_data.append({ 'home_team': row['home_team'], 'away_team': row['away_team'], 'predicted_winner': predicted_winner, 'spread_line': row['spread_line'], 'confidence': row['win_probability'], 'home_logo': team_logos.get(row['home_team']), 'away_logo': team_logos.get(row['away_team']) })
     return jsonify({'predictions': output_data, 'weekly_stats': weekly_stats})
-
 
 if __name__ == '__main__': app.run(debug=True)
 

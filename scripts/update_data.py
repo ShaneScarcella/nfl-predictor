@@ -2,9 +2,6 @@ import nflreadpy as nfl
 import os
 from datetime import datetime
 
-# --- THIS IS THE FIX ---
-# This block of code makes the script's paths robust.
-# It finds the script's own location and builds paths from there.
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.normpath(os.path.join(SCRIPT_DIR, '..'))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")

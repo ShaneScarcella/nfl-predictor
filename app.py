@@ -19,7 +19,7 @@ except FileNotFoundError as e:
 
 @app.route('/custom_predict', methods=['POST'])
 def custom_predict():
-    # This function  uses the proportional scoring algorithm
+    # This function uses the proportional scoring algorithm
     if team_avg_stats_df.empty:
         return jsonify({'error': 'Team average stats not loaded.'})
 
@@ -39,29 +39,56 @@ def custom_predict():
     # Offensive Yards (higher is better)
     h_stat, a_stat = home_stats['avg_off_yards'], away_stats['avg_off_yards']
     total = h_stat + a_stat
-    if total > 0:
+    if total > 0 and weights.get('offense', 0) > 0:
         h_share, a_share = h_stat / total, a_stat / total
         home_score += weights['offense'] * h_share
         away_score += weights['offense'] * a_share
         breakdown.append({'cat': 'Offense (Yds/G)', 'h_val': round(h_stat, 1), 'a_val': round(a_stat, 1), 'h_share': h_share, 'a_share': a_share})
 
+    # Offensive TDs (higher is better)
+    h_stat, a_stat = home_stats['avg_off_tds'], away_stats['avg_off_tds']
+    total = h_stat + a_stat
+    if total > 0 and weights.get('offense_td', 0) > 0:
+        h_share, a_share = h_stat / total, a_stat / total
+        home_score += weights['offense_td'] * h_share
+        away_score += weights['offense_td'] * a_share
+        breakdown.append({'cat': 'Offense (TDs/G)', 'h_val': round(h_stat, 2), 'a_val': round(a_stat, 2), 'h_share': h_share, 'a_share': a_share})
+
     # Defensive Yards (lower is better, so shares are inverted)
     h_stat, a_stat = home_stats['avg_def_yards_allowed'], away_stats['avg_def_yards_allowed']
     total = h_stat + a_stat
-    if total > 0:
+    if total > 0 and weights.get('defense', 0) > 0:
         h_share, a_share = a_stat / total, h_stat / total
         home_score += weights['defense'] * h_share
         away_score += weights['defense'] * a_share
         breakdown.append({'cat': 'Defense (Yds Allow/G)', 'h_val': round(h_stat, 1), 'a_val': round(a_stat, 1), 'h_share': h_share, 'a_share': a_share})
 
+    # Defensive TDs (lower is better, so shares are inverted)
+    h_stat, a_stat = home_stats['avg_def_tds_allowed'], away_stats['avg_def_tds_allowed']
+    total = h_stat + a_stat
+    if total > 0 and weights.get('defense_td', 0) > 0:
+        h_share, a_share = a_stat / total, h_stat / total
+        home_score += weights['defense_td'] * h_share
+        away_score += weights['defense_td'] * a_share
+        breakdown.append({'cat': 'Defense (TDs Allow/G)', 'h_val': round(h_stat, 2), 'a_val': round(a_stat, 2), 'h_share': h_share, 'a_share': a_share})
+
     # Turnovers (lower is better, so shares are inverted)
     h_stat, a_stat = home_stats['avg_turnovers'], away_stats['avg_turnovers']
     total = h_stat + a_stat
-    if total > 0:
+    if total > 0 and weights.get('turnovers', 0) > 0:
         h_share, a_share = a_stat / total, h_stat / total
         home_score += weights['turnovers'] * h_share
         away_score += weights['turnovers'] * a_share
-        breakdown.append({'cat': 'Turnovers (Per Game)', 'h_val': round(h_stat, 2), 'a_val': round(a_stat, 2), 'h_share': h_share, 'a_share': a_share})
+        breakdown.append({'cat': 'Turnover Avoidance', 'h_val': round(h_stat, 2), 'a_val': round(a_stat, 2), 'h_share': h_share, 'a_share': a_share})
+
+    # Defensive Turnovers Forced (higher is better)
+    h_stat, a_stat = home_stats['avg_def_turnovers_forced'], away_stats['avg_def_turnovers_forced']
+    total = h_stat + a_stat
+    if total > 0 and weights.get('def_turnovers', 0) > 0:
+        h_share, a_share = h_stat / total, a_stat / total
+        home_score += weights['def_turnovers'] * h_share
+        away_score += weights['def_turnovers'] * a_share
+        breakdown.append({'cat': 'Defensive Playmaking', 'h_val': round(h_stat, 2), 'a_val': round(a_stat, 2), 'h_share': h_share, 'a_share': a_share})
 
     winner = home_team if home_score > away_score else away_team
     if home_score == away_score: winner = "It's a tie!"

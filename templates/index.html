@@ -69,7 +69,14 @@
             <button class="tab-button" onclick="showTab('custom-engine')">Custom Matchup Engine</button>
         </nav>
         <div id="ai-model" class="tab-content active"><section class="dashboard" id="performance-summary"></section><div class="filters"><select id="season-select" onchange="handleSeasonChange()"></select><select id="week-select" onchange="onWeekChange()"></select></div><section class="dashboard" id="weekly-summary" style="display: none;"></section><h2 id="ai-weekly-header" class="weekly-header"></h2><main id="game-list"></main></div>
-        <div id="custom-engine" class="tab-content"><div class="dashboard"><h2>Build Your Own Prediction</h2><p>Adjust the sliders to weigh each factor based on your football philosophy.</p><div class="slider-section"><div class="slider-group"><label for="offense-slider">Offensive Power</label><input type="range" id="offense-slider" min="0" max="100" value="50"></div><div class="slider-group"><label for="defense-slider">Defensive Strength</label><input type="range" id="defense-slider" min="0" max="100" value="50"></div><div class="slider-group"><label for="turnovers-slider">Turnover Battle</label><input type="range" id="turnovers-slider" min="0" max="100" value="50"></div></div></div><h2 id="custom-weekly-header" class="weekly-header"></h2><main id="custom-game-list"></main></div>
+        <div id="custom-engine" class="tab-content"><div class="dashboard"><h2>Build Your Own Prediction</h2><p>Adjust the sliders to weigh each factor based on your football philosophy.</p><div class="slider-section">
+                        <div class="slider-group"><label for="offense-slider">Offensive Power (Yards)</label><input type="range" id="offense-slider" min="0" max="100" value="33"></div>
+                        <div class="slider-group"><label for="offense-td-slider">Offensive Scoring</label><input type="range" id="offense-td-slider" min="0" max="100" value="33"></div>
+                        <div class="slider-group"><label for="defense-slider">Defensive Strength (Yards)</label><input type="range" id="defense-slider" min="0" max="100" value="33"></div>
+                        <div class="slider-group"><label for="defense-td-slider">Defensive Scoring</label><input type="range" id="defense-td-slider" min="0" max="100" value="33"></div>
+                        <div class="slider-group"><label for="turnovers-slider">Turnover Avoidance</label><input type="range" id="turnovers-slider" min="0" max="100" value="33"></div>
+                        <div class="slider-group"><label for="def-turnover-slider">Defensive Playmaking</label><input type="range" id="def-turnover-slider" min="0" max="100" value="33"></div>
+                    </div></div><h2 id="custom-weekly-header" class="weekly-header"></h2><main id="custom-game-list"></main></div>
     </div>
     <div id="details-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeModal()">&times;</span><div id="modal-body"></div></div></div>
 
@@ -137,7 +144,14 @@
         };
         
         const runCustomPrediction = (homeTeam, awayTeam, season, week, actualWinner) => {
-            const weights = { offense: parseInt(document.getElementById('offense-slider').value), defense: parseInt(document.getElementById('defense-slider').value), turnovers: parseInt(document.getElementById('turnovers-slider').value) };
+            const weights = {
+                offense: parseInt(document.getElementById('offense-slider').value),
+                offense_td: parseInt(document.getElementById('offense-td-slider').value),
+                defense: parseInt(document.getElementById('defense-slider').value),
+                defense_td: parseInt(document.getElementById('defense-td-slider').value),
+                turnovers: parseInt(document.getElementById('turnovers-slider').value),
+                def_turnovers: parseInt(document.getElementById('def-turnover-slider').value)
+            };
             modalBody.innerHTML = `<div class="loader">Calculating...</div>`; openModal();
             fetch('/custom_predict', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ home_team: homeTeam, away_team: awayTeam, season, week, weights }) })
             .then(res => res.json()).then(result => {

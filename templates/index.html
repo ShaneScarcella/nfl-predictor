@@ -8,6 +8,7 @@
         :root {
             --dark-bg: #121212; --medium-bg: #1e1e1e; --light-bg: #282828;
             --primary-text: #e0e0e0; --secondary-text: #a0a0a0; --accent-color: #4CAF50;
+            --correct-color: #4ade80; --incorrect-color: #f87171;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -36,7 +37,12 @@
         .vs { color: #666; font-size: 0.8em; }
         .weekly-header { text-align: center; margin-bottom: 20px; }
         .ai-prediction-summary { text-align: center; padding: 12px; border-radius: 8px; background-color: var(--light-bg); }
-        .ai-winner { font-weight: bold; font-size: 1.2em; color: var(--accent-color); }
+        .ai-winner, .actual-winner-text { font-weight: bold; font-size: 1.2em; }
+        .ai-winner { color: var(--accent-color); }
+        .actual-winner { margin-top: 10px; }
+        .prediction-icon { font-size: 1.4em; margin-right: 8px; }
+        .correct { color: var(--correct-color); }
+        .incorrect { color: var(--incorrect-color); }
         .details-button { margin-top: 12px; background-color: #444; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; }
         .slider-section { margin-top: 20px; padding-top: 20px; border-top: 1px solid #444; }
         .slider-group { margin-bottom: 15px; }
@@ -62,92 +68,21 @@
             <button class="tab-button active" onclick="showTab('ai-model')">AI Model Predictor</button>
             <button class="tab-button" onclick="showTab('custom-engine')">Custom Matchup Engine</button>
         </nav>
-
-        <div id="ai-model" class="tab-content active">
-            <section class="dashboard" id="performance-summary"></section>
-            <div class="filters">
-                <select id="season-select" onchange="handleSeasonChange()"><option>Loading...</option></select>
-                <select id="week-select" onchange="onWeekChange()"><option>Loading...</option></select>
-            </div>
-            <section class="dashboard" id="weekly-summary" style="display: none;"></section>
-            <h2 id="ai-weekly-header" class="weekly-header"></h2>
-            <main id="game-list"></main>
-        </div>
-
-        <div id="custom-engine" class="tab-content">
-            <div class="dashboard">
-                <h2>Build Your Own Prediction</h2>
-                <p>Adjust the sliders to weigh each factor based on your football philosophy.</p>
-                <div class="slider-section">
-                    <div class="slider-group"><label for="offense-slider">Offensive Power</label><input type="range" id="offense-slider" min="0" max="100" value="50"></div>
-                    <div class="slider-group"><label for="defense-slider">Defensive Strength</label><input type="range" id="defense-slider" min="0" max="100" value="50"></div>
-                    <div class="slider-group"><label for="turnovers-slider">Turnover Battle</label><input type="range" id="turnovers-slider" min="0" max="100" value="50"></div>
-                </div>
-            </div>
-            <h2 id="custom-weekly-header" class="weekly-header"></h2>
-            <main id="custom-game-list"></main>
-        </div>
+        <div id="ai-model" class="tab-content active"><section class="dashboard" id="performance-summary"></section><div class="filters"><select id="season-select" onchange="handleSeasonChange()"></select><select id="week-select" onchange="onWeekChange()"></select></div><section class="dashboard" id="weekly-summary" style="display: none;"></section><h2 id="ai-weekly-header" class="weekly-header"></h2><main id="game-list"></main></div>
+        <div id="custom-engine" class="tab-content"><div class="dashboard"><h2>Build Your Own Prediction</h2><p>Adjust the sliders to weigh each factor based on your football philosophy.</p><div class="slider-section"><div class="slider-group"><label for="offense-slider">Offensive Power</label><input type="range" id="offense-slider" min="0" max="100" value="50"></div><div class="slider-group"><label for="defense-slider">Defensive Strength</label><input type="range" id="defense-slider" min="0" max="100" value="50"></div><div class="slider-group"><label for="turnovers-slider">Turnover Battle</label><input type="range" id="turnovers-slider" min="0" max="100" value="50"></div></div></div><h2 id="custom-weekly-header" class="weekly-header"></h2><main id="custom-game-list"></main></div>
     </div>
-
     <div id="details-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeModal()">&times;</span><div id="modal-body"></div></div></div>
 
     <script>
-        let seasonsData = {};
-        let weeklyMatchups = [];
-        const modal = document.getElementById('details-modal');
-        const modalBody = document.getElementById('modal-body');
+        let seasonsData = {}, weeklyMatchups = [];
+        const modal = document.getElementById('details-modal'), modalBody = document.getElementById('modal-body');
         
-        const runCustomPrediction = (homeTeam, awayTeam, season, week) => {
-            const weights = { offense: parseInt(document.getElementById('offense-slider').value), defense: parseInt(document.getElementById('defense-slider').value), turnovers: parseInt(document.getElementById('turnovers-slider').value) };
-            modalBody.innerHTML = `<div class="loader">Calculating...</div>`;
-            openModal();
-            fetch('/custom_predict', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ home_team: homeTeam, away_team: awayTeam, season, week, weights }) })
-            .then(res => res.json()).then(result => {
-                if (result.error) {
-                    modalBody.innerHTML = `<h3>Error</h3><p>${result.error}</p>`;
-                    return;
-                }
-                
-                // Build the new, detailed breakdown HTML.
-                let breakdownHtml = '<div class="breakdown-container">';
-                result.breakdown.forEach(item => {
-                    breakdownHtml += `
-                        <div class="breakdown-row">
-                            <h5>${item.cat}</h5>
-                            <div class="breakdown-stats">
-                                <span>${item.a_val}</span>
-                                <div class="breakdown-bar">
-                                    <div class="breakdown-bar-away" style="width: ${item.a_share * 100}%"></div>
-                                    <div class="breakdown-bar-home" style="width: ${item.h_share * 100}%"></div>
-                                </div>
-                                <span>${item.h_val}</span>
-                            </div>
-                        </div>
-                    `;
-                });
-                breakdownHtml += '</div>';
-
-                modalBody.innerHTML = `
-                    <h3>Custom Prediction Result</h3>
-                    <div class="teams">
-                        <div class="team"><span>${awayTeam}</span><h4>${result.away_score}</h4></div>
-                        <span class="vs">FINAL SCORE</span>
-                        <div class="team"><span>${homeTeam}</span><h4>${result.home_score}</h4></div>
-                    </div>
-                    <hr>
-                    <h4>Predicted Winner: <span style="color:var(--accent-color)">${result.winner}</span></h4>
-                    <h4>Scoring Breakdown:</h4>
-                    ${breakdownHtml}
-                `;
-            });
-        };
-
         const showTab = (tabId) => {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
             document.querySelector(`.tab-button[onclick="showTab('${tabId}')"]`).classList.add('active');
-            onWeekChange(); 
+            onWeekChange();
         };
 
         const fetchAIPredictions = () => {
@@ -167,13 +102,19 @@
                 weeklyMatchups.forEach(game => {
                     const card = document.createElement('div');
                     card.className = 'game-card';
-                    card.innerHTML = `<div class="teams"><div class="team"><img src="${game.away_logo}" alt="${game.away_team} logo" onerror="this.style.display='none'"><span>${game.away_team}</span></div><span class="vs">VS</span><div class="team"><img src="${game.home_logo}" alt="${game.home_team} logo" onerror="this.style.display='none'"><span>${game.home_team}</span></div></div><div class="ai-prediction-summary"><div>AI Predicted Winner: <span class="ai-winner">${game.predicted_winner}</span></div><button class="details-button" onclick='showAIDetails(${JSON.stringify(game)})'>Show Details</button></div>`;
+                    let actualWinnerHtml = '';
+                    if (game.actual_winner) {
+                        const isCorrect = game.predicted_winner === game.actual_winner;
+                        const icon = isCorrect ? '<span class="prediction-icon correct">✓</span>' : '<span class="prediction-icon incorrect">✗</span>';
+                        actualWinnerHtml = `<div class="actual-winner">${icon}Actual Winner: <span class="actual-winner-text ${isCorrect ? 'correct' : 'incorrect'}">${game.actual_winner}</span></div>`;
+                    }
+                    card.innerHTML = `<div class="teams"><div class="team"><img src="${game.away_logo}" alt="${game.away_team} logo" onerror="this.style.display='none'"><span>${game.away_team}</span></div><span class="vs">VS</span><div class="team"><img src="${game.home_logo}" alt="${game.home_team} logo" onerror="this.style.display='none'"><span>${game.home_team}</span></div></div><div class="ai-prediction-summary"><div>AI Predicted Winner: <span class="ai-winner">${game.predicted_winner}</span></div>${actualWinnerHtml}<button class="details-button" onclick='showAIDetails(${JSON.stringify(game)})'>Show Details</button></div>`;
                     gameList.appendChild(card);
                 });
                 populateCustomGames();
             });
         };
-
+        
         const populateCustomGames = () => {
             const season = document.getElementById('season-select').value, week = document.getElementById('week-select').value;
             const customGameList = document.getElementById('custom-game-list'), weeklyHeader = document.getElementById('custom-weekly-header');
@@ -190,17 +131,42 @@
             weeklyMatchups.forEach(game => {
                 const newCard = document.createElement('div');
                 newCard.className = 'game-card';
-                newCard.innerHTML = `<div class="teams"><div class="team"><img src="${game.away_logo}" alt="${game.away_team} logo" onerror="this.style.display='none'"><span>${game.away_team}</span></div><span class="vs">VS</span><div class="team"><img src="${game.home_logo}" alt="${game.home_team} logo" onerror="this.style.display='none'"><span>${game.home_team}</span></div></div><button class="custom-predict-button" onclick="runCustomPrediction('${game.home_team}', '${game.away_team}', ${season}, ${week})">Build & Predict</button>`;
+                newCard.innerHTML = `<div class="teams"><div class="team"><img src="${game.away_logo}" alt="${game.away_team} logo" onerror="this.style.display='none'"><span>${game.away_team}</span></div><span class="vs">VS</span><div class="team"><img src="${game.home_logo}" alt="${game.home_team} logo" onerror="this.style.display='none'"><span>${game.home_team}</span></div></div><button class="custom-predict-button" onclick="runCustomPrediction('${game.home_team}', '${game.away_team}', ${season}, ${week}, '${game.actual_winner}')">Build & Predict</button>`;
                 customGameList.appendChild(newCard);
             });
         };
-
+        
+        const runCustomPrediction = (homeTeam, awayTeam, season, week, actualWinner) => {
+            const weights = { offense: parseInt(document.getElementById('offense-slider').value), defense: parseInt(document.getElementById('defense-slider').value), turnovers: parseInt(document.getElementById('turnovers-slider').value) };
+            modalBody.innerHTML = `<div class="loader">Calculating...</div>`; openModal();
+            fetch('/custom_predict', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ home_team: homeTeam, away_team: awayTeam, season, week, weights }) })
+            .then(res => res.json()).then(result => {
+                if (result.error) { modalBody.innerHTML = `<h3>Error</h3><p>${result.error}</p>`; return; }
+                let breakdownHtml = '<div class="breakdown-container">';
+                result.breakdown.forEach(item => {
+                    breakdownHtml += `<div class="breakdown-row"><h5>${item.cat}</h5><div class="breakdown-stats"><span>${item.a_val}</span><div class="breakdown-bar"><div class="breakdown-bar-away" style="width: ${item.a_share * 100}%"></div><div class="breakdown-bar-home" style="width: ${item.h_share * 100}%"></div></div><span>${item.h_val}</span></div></div>`;
+                });
+                breakdownHtml += '</div>';
+                let actualWinnerHtml = '';
+                if (actualWinner && actualWinner !== 'null') {
+                    const isCorrect = result.winner === actualWinner;
+                    const icon = isCorrect ? '<span class="prediction-icon correct">✓</span>' : '<span class="prediction-icon incorrect">✗</span>';
+                    actualWinnerHtml = `<h4>${icon}Actual Winner: <span class="actual-winner-text ${isCorrect ? 'correct' : 'incorrect'}">${actualWinner}</span></h4>`;
+                }
+                modalBody.innerHTML = `<h3>Custom Prediction Result</h3><div class="teams"><div class="team"><span>${awayTeam}</span><h4>${result.away_score}</h4></div><span class="vs">FINAL SCORE</span><div class="team"><span>${homeTeam}</span><h4>${result.home_score}</h4></div></div><hr><h4>Predicted Winner: <span style="color:var(--accent-color)">${result.winner}</span></h4>${actualWinnerHtml}<h4>Scoring Breakdown:</h4>${breakdownHtml}`;
+            });
+        };
+        
         const openModal = () => modal.style.display = 'block';
         const closeModal = () => modal.style.display = 'none';
         window.onclick = (event) => { if (event.target == modal) closeModal(); };
         const showAIDetails = (game) => {
             const confidencePercent = (game.confidence * 100).toFixed(0);
-            modalBody.innerHTML = `<h3>AI Prediction Details</h3><h4>${game.away_team} vs. ${game.home_team}</h4><p>Predicted Winner: <span style="color:var(--accent-color); font-weight:bold;">${game.predicted_winner}</span></p><p>Model Confidence: <strong>${confidencePercent}%</strong></p><p>Vegas Spread: ${game.spread_line > 0 ? '+' : ''}${game.spread_line}</p>`;
+            let actualWinnerHtml = '';
+            if (game.actual_winner) {
+                actualWinnerHtml = `<p>Actual Winner: <strong>${game.actual_winner}</strong></p>`;
+            }
+            modalBody.innerHTML = `<h3>AI Prediction Details</h3><h4>${game.away_team} vs. ${game.home_team}</h4><p>Predicted Winner: <span style="color:var(--accent-color); font-weight:bold;">${game.predicted_winner}</span></p>${actualWinnerHtml}<p>Model Confidence: <strong>${confidencePercent}%</strong></p><p>Vegas Spread: ${game.spread_line > 0 ? '+' : ''}${game.spread_line}</p>`;
             openModal();
         };
 

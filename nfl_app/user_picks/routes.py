@@ -19,8 +19,13 @@ def save_pick():
     data = request.get_json()
     
     user = data.get('user')
-    season = data.get('season')
-    week = data.get('week')
+    # Cast season and week to integers ---
+    try:
+        season = int(data.get('season'))
+        week = int(data.get('week'))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid season or week format'}), 400
+        
     home_team = data.get('home_team')
     away_team = data.get('away_team')
     pick = data.get('pick')
@@ -31,7 +36,8 @@ def save_pick():
     # Load existing picks
     df = pd.read_csv(PICKS_FILE)
 
-    # Remove any existing pick for this specific game by this user to allow "switching" sides
+    # Remove any existing pick for this specific game by this user
+    # Now that season/week are ints, this comparison will work correctly
     mask = (
         (df['user'] == user) & 
         (df['season'] == season) & 
@@ -64,6 +70,7 @@ def get_user_picks():
 
     try:
         df = pd.read_csv(PICKS_FILE)
+        # Filter for the specific user and week
         user_picks_df = df[
             (df['user'] == user) & 
             (df['season'] == season) & 
@@ -84,16 +91,23 @@ def leaderboard():
     if picks_df.empty:
         return jsonify([])
 
+    # Only grade games that have been finished (have a result)
     results_df = games_df.dropna(subset=['result'])[['season', 'week', 'home_team', 'away_team', 'result']]
+
+    # Merge picks with results
     merged_df = pd.merge(picks_df, results_df, on=['season', 'week', 'home_team', 'away_team'], how='inner')
 
     def check_win(row):
-        if row['result'] > 0 and row['pick'] == row['home_team']: return 1
-        elif row['result'] < 0 and row['pick'] == row['away_team']: return 1
+        # Result > 0 is Home Win, < 0 is Away Win
+        if row['result'] > 0 and row['pick'] == row['home_team']:
+            return 1
+        elif row['result'] < 0 and row['pick'] == row['away_team']:
+            return 1
         return 0
 
     merged_df['is_correct'] = merged_df.apply(check_win, axis=1)
 
+    # Group by User to get stats
     leaderboard_data = []
     grouped = merged_df.groupby('user')
     
@@ -109,5 +123,7 @@ def leaderboard():
             'pct': f"{pct:.1f}%"
         })
 
+    # Sort by wins (descending)
     leaderboard_data.sort(key=lambda x: float(x['pct'].strip('%')), reverse=True)
+
     return jsonify(leaderboard_data)

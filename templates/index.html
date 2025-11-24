@@ -144,29 +144,69 @@
         };
 
         const fetchAIPredictions = () => {
-            const season = document.getElementById('season-select').value, week = document.getElementById('week-select').value;
-            const gameList = document.getElementById('game-list'), weeklySummary = document.getElementById('weekly-summary'), weeklyHeader = document.getElementById('ai-weekly-header');
+            const season = document.getElementById('season-select').value;
+            const week = document.getElementById('week-select').value;
+            const gameList = document.getElementById('game-list');
+            const weeklySummary = document.getElementById('weekly-summary');
+            const weeklyHeader = document.getElementById('ai-weekly-header');
+
             if (!season || !week) return;
+
             weeklyHeader.textContent = `Predictions for ${season} - Week ${week}`;
             gameList.innerHTML = `<div class="loader">Loading AI predictions...</div>`;
             weeklySummary.style.display = 'none';
-            fetch(`/get_predictions?season=${season}&week=${week}`).then(res => res.json()).then(data => {
-                gameList.innerHTML = '';
-                weeklyMatchups = data.predictions;
-                if (data.weekly_stats && data.weekly_stats.record) {
-                    weeklySummary.innerHTML = `<h3>Results for ${season} - Week ${week}</h3><div class="stats-container"><div class="stat"><span class="stat-value">${data.weekly_stats.record}</span><span class="stat-label">Record</span></div><div class="stat"><span class="stat-value">${data.weekly_stats.accuracy}</span><span class="stat-label">Accuracy</span></div><div class="stat"><span class="stat-value">${data.weekly_stats.roi}</span><span class="stat-label">Simulated ROI</span></div></div>`;
-                    weeklySummary.style.display = 'block';
-                }
-                weeklyMatchups.forEach(game => {
-                    const card = document.createElement('div'); card.className = 'game-card';
-                    let actualWinnerHtml = '';
-                    if (game.actual_winner) { const isCorrect = game.predicted_winner === game.actual_winner; const icon = isCorrect ? '<span class="prediction-icon correct">✓</span>' : '<span class="prediction-icon incorrect">✗</span>'; actualWinnerHtml = `<div class="actual-winner">${icon}Actual Winner: <span class="actual-winner-text ${isCorrect ? 'correct' : 'incorrect'}">${game.actual_winner}</span></div>`; }
-                    card.innerHTML = `<div class="teams"><div class="team"><img src="${game.away_logo}" alt="${game.away_team} logo" onerror="this.style.display='none'"><span>${game.away_team}</span></div><span class="vs">VS</span><div class="team"><img src="${game.home_logo}" alt="${game.home_team} logo" onerror="this.style.display='none'"><span>${game.home_team}</span></div></div><div class="ai-prediction-summary"><div>AI Predicted Winner: <span class="ai-winner">${game.predicted_winner}</span></div>${actualWinnerHtml}<button class="details-button" onclick='showAIDetails(${JSON.stringify(game)})'>Show Details</button></div>`;
-                    gameList.appendChild(card);
+
+            fetch(`/get_predictions?season=${season}&week=${week}`)
+                .then(res => res.json())
+                .then(data => {
+                    gameList.innerHTML = '';
+                    weeklyMatchups = data.predictions;
+
+                    if (data.weekly_stats && data.weekly_stats.record) {
+                        weeklySummary.innerHTML = `
+                            <h3>Results for ${season} - Week ${week}</h3>
+                            <div class="stats-container">
+                                <div class="stat"><span class="stat-value">${data.weekly_stats.record}</span><span class="stat-label">Record</span></div>
+                                <div class="stat"><span class="stat-value">${data.weekly_stats.accuracy}</span><span class="stat-label">Accuracy</span></div>
+                                <div class="stat"><span class="stat-value">${data.weekly_stats.roi}</span><span class="stat-label">Simulated ROI</span></div>
+                            </div>`;
+                        weeklySummary.style.display = 'block';
+                    }
+
+                    weeklyMatchups.forEach(game => {
+                        const card = document.createElement('div');
+                        card.className = 'game-card';
+
+                        let actualWinnerHtml = '';
+                        if (game.actual_winner) {
+                            const isCorrect = game.predicted_winner === game.actual_winner;
+                            const icon = isCorrect ? '<span class="prediction-icon correct">✓</span>' : '<span class="prediction-icon incorrect">✗</span>';
+                            actualWinnerHtml = `<div class="actual-winner">${icon}Actual Winner: <span class="actual-winner-text ${isCorrect ? 'correct' : 'incorrect'}">${game.actual_winner}</span></div>`;
+                        }
+
+                        card.innerHTML = `
+                            <div class="teams">
+                                <div class="team"><img src="${game.away_logo}" alt="${game.away_team} logo" onerror="this.style.display='none'"><span>${game.away_team}</span></div>
+                                <span class="vs">VS</span>
+                                <div class="team"><img src="${game.home_logo}" alt="${game.home_team} logo" onerror="this.style.display='none'"><span>${game.home_team}</span></div>
+                            </div>
+                            <div class="ai-prediction-summary">
+                                <div>AI Predicted Winner: <span class="ai-winner">${game.predicted_winner}</span></div>
+                                ${actualWinnerHtml} 
+                                <button class="details-button">Show Details</button>
+                            </div>
+                        `;
+
+                        const btn = card.querySelector('.details-button');
+                        
+                        btn.addEventListener('click', () => showAIDetails(game));
+
+                        gameList.appendChild(card);
+                    });
+
+                    populateCustomGames();
+                    populateSoSTeamSelect();
                 });
-                populateCustomGames();
-                populateSoSTeamSelect();
-            });
         };
         
         const populateCustomGames = () => {
@@ -243,7 +283,46 @@
         const openModal = () => modal.style.display = 'block';
         const closeModal = () => modal.style.display = 'none';
         window.onclick = (event) => { if (event.target == modal) closeModal(); };
-        const showAIDetails = (game) => {};
+        const showAIDetails = (game) => {
+            let breakdownHtml = '';
+            if (game.prediction_breakdown) {
+                breakdownHtml = '<div class="breakdown-container">';
+                for (const [key, value] of Object.entries(game.prediction_breakdown)) {
+                    breakdownHtml += `<p><strong>${key}:</strong> ${value}</p>`;
+                }
+                breakdownHtml += '</div>';
+            } else {
+                breakdownHtml = `<p>Spread Line: ${game.spread_line}</p><p>Confidence: ${game.confidence}%</p>`;
+            }
+
+            let actualWinnerHtml = '';
+            if (game.actual_winner && game.actual_winner !== 'null') {
+                const isCorrect = game.predicted_winner === game.actual_winner;
+                const icon = isCorrect ? '<span class="prediction-icon correct">✓</span>' : '<span class="prediction-icon incorrect">✗</span>';
+                actualWinnerHtml = `<h4>${icon}Actual Winner: <span class="actual-winner-text ${isCorrect ? 'correct' : 'incorrect'}">${game.actual_winner}</span></h4>`;
+            }
+
+            modalBody.innerHTML = `
+                <h3>AI Prediction Details</h3>
+                <div class="teams">
+                    <div class="team">
+                        <img src="${game.away_logo}" alt="${game.away_team} logo" onerror="this.style.display='none'">
+                        <span>${game.away_team}</span>
+                    </div>
+                    <span class="vs">VS</span>
+                    <div class="team">
+                        <img src="${game.home_logo}" alt="${game.home_team} logo" onerror="this.style.display='none'">
+                        <span>${game.home_team}</span>
+                    </div>
+                </div>
+                <hr>
+                <h4>Predicted Winner: <span style="color:var(--accent-color)">${game.predicted_winner}</span></h4>
+                ${actualWinnerHtml}
+                <h4>Prediction Breakdown:</h4>
+                ${breakdownHtml}
+            `;
+            openModal();
+        };
         
         const onWeekChange = () => {
              // Fetch data based on the currently active tab

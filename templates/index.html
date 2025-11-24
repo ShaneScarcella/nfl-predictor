@@ -179,7 +179,14 @@
                 <h2>League Standings</h2>
                 <p>Track who has the best prediction record.</p>
                 <table class="leaderboard-table">
-                    <thead><tr><th>Rank</th><th>User</th><th>Record</th><th>Win %</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>User</th>
+                            <th>Record</th>
+                            <th>Win %</th>
+                            <th>Profit ($100 bets)</th> </tr>
+                    </thead>
                     <tbody id="leaderboard-body"></tbody>
                 </table>
             </div>
@@ -409,16 +416,29 @@
 
         const loadLeaderboard = () => {
             const tbody = document.getElementById('leaderboard-body');
-            tbody.innerHTML = '<tr><td colspan="4" class="loader">Loading stats...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="loader">Loading stats...</td></tr>'; // Updated colspan to 5
             
             fetch('/leaderboard')
                 .then(res => res.json())
                 .then(data => {
                     tbody.innerHTML = '';
-                    if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="4">No picks recorded yet.</td></tr>'; return; }
+                    if (data.length === 0) { 
+                        tbody.innerHTML = '<tr><td colspan="5">No picks recorded yet.</td></tr>'; 
+                        return; 
+                    }
                     
                     data.forEach((entry, index) => {
-                        tbody.innerHTML += `<tr><td>${index + 1}</td><td>${entry.user}</td><td>${entry.record}</td><td>${entry.pct}</td></tr>`;
+                        // Color code the profit
+                        const profitClass = entry.raw_profit > 0 ? 'correct' : (entry.raw_profit < 0 ? 'incorrect' : '');
+                        
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>${index + 1}</td>
+                                <td>${entry.user}</td>
+                                <td>${entry.record}</td>
+                                <td>${entry.pct}</td>
+                                <td class="${profitClass}">${entry.profit}</td>
+                            </tr>`;
                     });
                 });
         };

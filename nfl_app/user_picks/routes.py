@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 import pandas as pd
 import os
 from nfl_app.data_loader import games_df
+from nfl_app.utils import calculate_profit
 
 user_picks = Blueprint('user_picks', __name__)
 
@@ -91,39 +92,77 @@ def leaderboard():
     if picks_df.empty:
         return jsonify([])
 
-    # Only grade games that have been finished (have a result)
-    results_df = games_df.dropna(subset=['result'])[['season', 'week', 'home_team', 'away_team', 'result']]
+    #  Fetch Result AND Moneyline odds
+    cols_needed = ['season', 'week', 'home_team', 'away_team', 'result', 'home_moneyline', 'away_moneyline']
+    results_df = games_df.dropna(subset=['result'])[cols_needed]
 
-    # Merge picks with results
+    #  Merge picks with game data
     merged_df = pd.merge(picks_df, results_df, on=['season', 'week', 'home_team', 'away_team'], how='inner')
 
-    def check_win(row):
-        # Result > 0 is Home Win, < 0 is Away Win
-        if row['result'] > 0 and row['pick'] == row['home_team']:
-            return 1
-        elif row['result'] < 0 and row['pick'] == row['away_team']:
-            return 1
-        return 0
+    def calculate_pick_outcome(row):
+        # Default values
+        points = 0
+        profit = 0
+        bet_amount = 100
 
-    merged_df['is_correct'] = merged_df.apply(check_win, axis=1)
+        # Check who won
+        home_won = row['result'] > 0
+        away_won = row['result'] < 0
+        
+        # Determine if the user was correct
+        is_correct = False
+        if (row['pick'] == row['home_team'] and home_won) or \
+           (row['pick'] == row['away_team'] and away_won):
+            is_correct = True
 
-    # Group by User to get stats
+        # Calculate Profit/Loss
+        if is_correct:
+            points = 1
+            # Get the odds for the team they picked
+            odds = row['home_moneyline'] if row['pick'] == row['home_team'] else row['away_moneyline']
+            
+            # Handle missing odds data gracefully
+            if pd.notna(odds):
+                profit = calculate_profit(odds, bet_amount)
+            else:
+                profit = 0 # No profit calculated if odds are missing
+        else:
+            # If they lost, they lose the $100 bet
+            # (If it was a tie, profit is 0, but we simplify here)
+            if row['result'] != 0: 
+                profit = -bet_amount
+
+        return pd.Series([points, profit])
+
+    # Apply the calculation
+    merged_df[['points', 'profit']] = merged_df.apply(calculate_pick_outcome, axis=1)
+
+    #  Aggregate by User
     leaderboard_data = []
     grouped = merged_df.groupby('user')
     
     for user, group in grouped:
         total_picks = len(group)
-        wins = group['is_correct'].sum()
+        wins = group['points'].sum()
+        total_profit = group['profit'].sum()
+        
         losses = total_picks - wins
         pct = (wins / total_picks * 100) if total_picks > 0 else 0
         
+        # Format profit (e.g., "+$150.25" or "-$50.00")
+        fmt_profit = f"${total_profit:,.2f}"
+        if total_profit > 0:
+            fmt_profit = f"+{fmt_profit}"
+
         leaderboard_data.append({
             'user': user,
-            'record': f"{wins}-{losses}",
-            'pct': f"{pct:.1f}%"
+            'record': f"{int(wins)}-{int(losses)}",
+            'pct': f"{pct:.1f}%",
+            'profit': fmt_profit,
+            'raw_profit': total_profit # Keep raw number for sorting
         })
 
-    # Sort by wins (descending)
-    leaderboard_data.sort(key=lambda x: float(x['pct'].strip('%')), reverse=True)
+    # Sort by Profit first, then Win %
+    leaderboard_data.sort(key=lambda x: (x['raw_profit'], float(x['pct'].strip('%'))), reverse=True)
 
     return jsonify(leaderboard_data)

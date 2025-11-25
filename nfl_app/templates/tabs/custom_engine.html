@@ -1,0 +1,16 @@
+<div id="custom-engine" class="tab-content">
+    <div class="dashboard">
+        <h2>Build Your Own Prediction</h2>
+        <p>Adjust the sliders to weigh each factor based on your football philosophy.</p>
+        <div class="slider-section">
+            <div class="slider-group"><label for="offense-slider">Offensive Power (Yards)</label><input type="range" id="offense-slider" min="0" max="100" value="33"></div>
+            <div class="slider-group"><label for="offense-td-slider">Offensive Scoring (TDs)</label><input type="range" id="offense-td-slider" min="0" max="100" value="33"></div>
+            <div class="slider-group"><label for="defense-slider">Defensive Strength (Yards)</label><input type="range" id="defense-slider" min="0" max="100" value="33"></div>
+            <div class="slider-group"><label for="defense-td-slider">Defensive Scoring (TDs Allowed)</label><input type="range" id="defense-td-slider" min="0" max="100" value="33"></div>
+            <div class="slider-group"><label for="turnovers-slider">Turnover Avoidance (Own TOs)</label><input type="range" id="turnovers-slider" min="0" max="100" value="33"></div>
+            <div class="slider-group"><label for="def-turnover-slider">Defensive Playmaking (TOs Forced)</label><input type="range" id="def-turnover-slider" min="0" max="100" value="33"></div>
+        </div>
+    </div>
+    <h2 id="custom-weekly-header" class="weekly-header"></h2>
+    <main id="custom-game-list"></main>
+</div>

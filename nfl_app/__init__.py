@@ -1,8 +1,12 @@
 from flask import Flask
 
 def create_app():
-    app = Flask(__name__, template_folder='../templates')
+    """
+    Application Factory: Creates and configures the Flask app.
+    """
+    app = Flask(__name__) 
 
+    # Import and register blueprints
     from nfl_app.main.routes import main
     from nfl_app.ai_predictor.routes import ai_predictor
     from nfl_app.custom_engine.routes import custom_engine

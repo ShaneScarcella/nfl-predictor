@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <nav class="tab-nav">
+        <button class="tab-button active" onclick="showTab('ai-model')">AI Model</button>
+        <button class="tab-button" onclick="showTab('custom-engine')">Custom Engine</button>
+        <button class="tab-button" onclick="showTab('sos-analysis')">SoS Analysis</button>
+        <button class="tab-button" onclick="showTab('leaderboard')">Leaderboard</button>
+    </nav>
+
+    {% include 'tabs/ai_model.html' %}
+    {% include 'tabs/custom_engine.html' %}
+    {% include 'tabs/sos_analysis.html' %}
+    {% include 'tabs/leaderboard.html' %}
+{% endblock %}

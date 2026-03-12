@@ -1,67 +1,71 @@
 from flask import Blueprint, jsonify, request
 import pandas as pd
+import sqlite3
 import os
 from nfl_app.data_loader import games_df
 from nfl_app.utils import calculate_profit
 
 user_picks = Blueprint('user_picks', __name__)
 
-# Path to our simple storage file
-PICKS_FILE = os.path.join(os.path.dirname(__file__), '../../data/user_picks.csv')
+DB_FILE = os.path.join(os.path.dirname(__file__), '../../data/user_picks.db')
 
-def ensure_picks_file_exists():
-    if not os.path.exists(PICKS_FILE):
-        df = pd.DataFrame(columns=['user', 'season', 'week', 'home_team', 'away_team', 'pick'])
-        df.to_csv(PICKS_FILE, index=False)
+def get_db_connection():
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def ensure_picks_table_exists():
+    conn = get_db_connection()
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS picks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user TEXT NOT NULL,
+            season INTEGER NOT NULL,
+            week INTEGER NOT NULL,
+            home_team TEXT NOT NULL,
+            away_team TEXT NOT NULL,
+            pick TEXT NOT NULL,
+            UNIQUE(user, season, week, home_team, away_team)
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
 @user_picks.route('/save_pick', methods=['POST'])
 def save_pick():
-    ensure_picks_file_exists()
+    ensure_picks_table_exists()
     data = request.get_json()
     
-    user = data.get('user')
-    # Cast season and week to integers ---
     try:
+        user = data.get('user')
         season = int(data.get('season'))
         week = int(data.get('week'))
+        home_team = data.get('home_team')
+        away_team = data.get('away_team')
+        pick = data.get('pick')
     except (ValueError, TypeError):
         return jsonify({'error': 'Invalid season or week format'}), 400
-        
-    home_team = data.get('home_team')
-    away_team = data.get('away_team')
-    pick = data.get('pick')
 
     if not user or not pick:
         return jsonify({'error': 'User and Pick are required.'})
 
-    # Load existing picks
-    df = pd.read_csv(PICKS_FILE)
-
-    # Remove any existing pick for this specific game by this user
-    # Now that season/week are ints, this comparison will work correctly
-    mask = (
-        (df['user'] == user) & 
-        (df['season'] == season) & 
-        (df['week'] == week) & 
-        (df['home_team'] == home_team) & 
-        (df['away_team'] == away_team)
-    )
-    df = df[~mask]
-
-    # Add the new pick
-    new_row = {
-        'user': user, 'season': season, 'week': week, 
-        'home_team': home_team, 'away_team': away_team, 'pick': pick
-    }
-    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-    
-    df.to_csv(PICKS_FILE, index=False)
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            INSERT INTO picks (user, season, week, home_team, away_team, pick)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user, season, week, home_team, away_team)
+            DO UPDATE SET pick=excluded.pick
+        ''', (user, season, week, home_team, away_team, pick))
+        conn.commit()
+    finally:
+        conn.close()
     
     return jsonify({'message': 'Pick saved!'})
 
 @user_picks.route('/get_user_picks')
 def get_user_picks():
-    ensure_picks_file_exists()
+    ensure_picks_table_exists()
     user = request.args.get('user')
     season = request.args.get('season', type=int)
     week = request.args.get('week', type=int)
@@ -69,75 +73,60 @@ def get_user_picks():
     if not user:
         return jsonify([])
 
-    try:
-        df = pd.read_csv(PICKS_FILE)
-        # Filter for the specific user and week
-        user_picks_df = df[
-            (df['user'] == user) & 
-            (df['season'] == season) & 
-            (df['week'] == week)
-        ]
-        return jsonify(user_picks_df.to_dict(orient='records'))
-    except pd.errors.EmptyDataError:
-        return jsonify([])
+    conn = get_db_connection()
+    picks = conn.execute(
+        'SELECT * FROM picks WHERE user = ? AND season = ? AND week = ?',
+        (user, season, week)
+    ).fetchall()
+    conn.close()
+
+    return jsonify([dict(ix) for ix in picks])
 
 @user_picks.route('/leaderboard')
 def leaderboard():
-    ensure_picks_file_exists()
-    try:
-        picks_df = pd.read_csv(PICKS_FILE)
-    except pd.errors.EmptyDataError:
-        return jsonify([])
+    ensure_picks_table_exists()
+    
+    conn = get_db_connection()
+    picks_df = pd.read_sql_query('SELECT * FROM picks', conn)
+    conn.close()
 
     if picks_df.empty:
         return jsonify([])
 
-    #  Fetch Result AND Moneyline odds
     cols_needed = ['season', 'week', 'home_team', 'away_team', 'result', 'home_moneyline', 'away_moneyline']
     results_df = games_df.dropna(subset=['result'])[cols_needed]
 
-    #  Merge picks with game data
     merged_df = pd.merge(picks_df, results_df, on=['season', 'week', 'home_team', 'away_team'], how='inner')
 
     def calculate_pick_outcome(row):
-        # Default values
         points = 0
         profit = 0
         bet_amount = 100
 
-        # Check who won
         home_won = row['result'] > 0
         away_won = row['result'] < 0
         
-        # Determine if the user was correct
         is_correct = False
         if (row['pick'] == row['home_team'] and home_won) or \
            (row['pick'] == row['away_team'] and away_won):
             is_correct = True
 
-        # Calculate Profit/Loss
         if is_correct:
             points = 1
-            # Get the odds for the team they picked
             odds = row['home_moneyline'] if row['pick'] == row['home_team'] else row['away_moneyline']
             
-            # Handle missing odds data gracefully
             if pd.notna(odds):
                 profit = calculate_profit(odds, bet_amount)
             else:
-                profit = 0 # No profit calculated if odds are missing
+                profit = 0 
         else:
-            # If they lost, they lose the $100 bet
-            # (If it was a tie, profit is 0, but we simplify here)
             if row['result'] != 0: 
                 profit = -bet_amount
 
         return pd.Series([points, profit])
 
-    # Apply the calculation
     merged_df[['points', 'profit']] = merged_df.apply(calculate_pick_outcome, axis=1)
 
-    #  Aggregate by User
     leaderboard_data = []
     grouped = merged_df.groupby('user')
     
@@ -149,7 +138,6 @@ def leaderboard():
         losses = total_picks - wins
         pct = (wins / total_picks * 100) if total_picks > 0 else 0
         
-        # Format profit (e.g., "+$150.25" or "-$50.00")
         fmt_profit = f"${total_profit:,.2f}"
         if total_profit > 0:
             fmt_profit = f"+{fmt_profit}"
@@ -159,10 +147,9 @@ def leaderboard():
             'record': f"{int(wins)}-{int(losses)}",
             'pct': f"{pct:.1f}%",
             'profit': fmt_profit,
-            'raw_profit': total_profit # Keep raw number for sorting
+            'raw_profit': total_profit 
         })
 
-    # Sort by Profit first, then Win %
     leaderboard_data.sort(key=lambda x: (x['raw_profit'], float(x['pct'].strip('%'))), reverse=True)
 
     return jsonify(leaderboard_data)

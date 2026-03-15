@@ -1,7 +1,10 @@
 venv/
-
 __pycache__/
 
+# Ignore generated data files
 data/*.csv
+# EXCEPT the static team logos mapping
+!data/team_logos.csv
 
+# Ignore generated machine learning models
 models/*.pkl

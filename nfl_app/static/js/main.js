@@ -1,15 +1,10 @@
-// --- Global Variables ---
-// These hold state that needs to be accessed by multiple functions
 let seasonsData = {};
 let weeklyMatchups = [];
 let allTeams = [];
 
-// --- DOM Elements ---
-// We grab these once so we don't have to keep searching the document
 const modal = document.getElementById('details-modal');
 const modalBody = document.getElementById('modal-body');
 
-// --- User Identity Logic ---
 function saveUsername() {
     const name = document.getElementById('username').value;
     if(name) localStorage.setItem('nfl_username', name);
@@ -20,18 +15,13 @@ function loadUsername() {
     if(saved) document.getElementById('username').value = saved;
 }
 
-// --- Tab Navigation ---
-// Switch between AI, Custom, SoS, and Leaderboard tabs
 const showTab = (tabId) => {
-    // Hide all tabs and deactivate buttons
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
     
-    // Show the selected tab and activate button
     document.getElementById(tabId).classList.add('active');
     document.querySelector(`.tab-button[onclick="showTab('${tabId}')"]`).classList.add('active');
     
-    // Refresh data for the specific tab
     if (tabId === 'leaderboard') {
         loadLeaderboard();
     } else {
@@ -39,9 +29,6 @@ const showTab = (tabId) => {
     }
 };
 
-// --- Prediction & Picking Logic ---
-
-// 1. Save a user's pick to the backend
 const savePick = (game, selectedTeam, teamElement, opponentElement) => {
     const user = document.getElementById('username').value;
     if (!user) { 
@@ -49,7 +36,6 @@ const savePick = (game, selectedTeam, teamElement, opponentElement) => {
         return; 
     }
 
-    // Visual Update (Highlight selected)
     teamElement.classList.add('selected-pick');
     opponentElement.classList.remove('selected-pick');
 
@@ -68,17 +54,26 @@ const savePick = (game, selectedTeam, teamElement, opponentElement) => {
         body: JSON.stringify(payload)
     })
     .then(res => res.json())
-    .then(data => console.log(data.message))
-    .catch(err => console.error("Error saving pick:", err));
+    .then(data => {
+        if (data.error) {
+            alert("Error: " + data.error);
+            teamElement.classList.remove('selected-pick');
+        } else {
+            console.log(data.message);
+        }
+    })
+    .catch(err => {
+        console.error("Error saving pick:", err);
+        alert("Network error: Could not connect to the server to save your pick.");
+        teamElement.classList.remove('selected-pick');
+    });
 };
 
-// 2. Fetch existing picks to highlight them on load
 const loadUserPicks = async () => {
     const user = document.getElementById('username').value;
     const season = document.getElementById('season-select').value;
     const week = document.getElementById('week-select').value;
     
-    // Return empty if basic info is missing
     if (!user || !season || !week) return [];
 
     try {
@@ -91,7 +86,6 @@ const loadUserPicks = async () => {
     }
 };
 
-// 3. Main AI Prediction Fetcher
 const fetchAIPredictions = async () => {
     const season = document.getElementById('season-select').value;
     const week = document.getElementById('week-select').value;
@@ -101,7 +95,6 @@ const fetchAIPredictions = async () => {
 
     if (!season || !week) return;
 
-    // Load user picks first so we can highlight them properly
     const userPicks = await loadUserPicks();
     const pickMap = {}; 
     userPicks.forEach(p => pickMap[`${p.home_team}-${p.away_team}`] = p.pick);
@@ -113,11 +106,14 @@ const fetchAIPredictions = async () => {
     fetch(`/get_predictions?season=${season}&week=${week}`)
         .then(res => res.json())
         .then(data => {
+            if (data.error) {
+                gameList.innerHTML = `<p style="color: var(--incorrect-color); text-align:center;">${data.error}</p>`;
+                return;
+            }
+
             gameList.innerHTML = '';
-            // Store global variable for other tabs to use
             weeklyMatchups = data.predictions;
 
-            // Show Weekly Summary Stats (Accuracy/ROI) if available
             if (data.weekly_stats && data.weekly_stats.record) {
                 weeklySummary.innerHTML = `
                     <h3>AI Results for ${season} - Week ${week}</h3>
@@ -129,12 +125,10 @@ const fetchAIPredictions = async () => {
                 weeklySummary.style.display = 'block';
             }
 
-            // Render Game Cards
             weeklyMatchups.forEach(game => {
                 const card = document.createElement('div');
                 card.className = 'game-card';
 
-                // Calculate Actual Winner Display
                 let actualWinnerHtml = '';
                 if (game.actual_winner) {
                     const isCorrect = game.predicted_winner === game.actual_winner;
@@ -142,7 +136,6 @@ const fetchAIPredictions = async () => {
                     actualWinnerHtml = `<div class="actual-winner">${icon}Actual Winner: <span class="actual-winner-text ${isCorrect ? 'correct' : 'incorrect'}">${game.actual_winner}</span></div>`;
                 }
 
-                // Check if user already picked a team
                 const key = `${game.home_team}-${game.away_team}`;
                 const userPick = pickMap[key];
                 const awaySelected = userPick === game.away_team ? 'selected-pick' : '';
@@ -167,29 +160,25 @@ const fetchAIPredictions = async () => {
                     </div>
                 `;
 
-                // Add click listeners for picking (closure fixes scope issues)
                 const awayDiv = card.querySelector(`#away-${key}`);
                 const homeDiv = card.querySelector(`#home-${key}`);
                 
                 awayDiv.addEventListener('click', () => savePick(game, game.away_team, awayDiv, homeDiv));
                 homeDiv.addEventListener('click', () => savePick(game, game.home_team, homeDiv, awayDiv));
                 
-                // Add click listener for Details button
                 card.querySelector('.details-button').addEventListener('click', () => showAIDetails(game));
 
                 gameList.appendChild(card);
             });
 
-            // Update other tabs that rely on this data
             populateCustomGames();
         })
         .catch(err => {
             console.error(err);
-            gameList.innerHTML = `<p style="color:red; text-align:center;">Error loading predictions.</p>`;
+            gameList.innerHTML = `<p style="color: var(--incorrect-color); text-align:center;">Failed to load predictions. Please check your network connection.</p>`;
         });
 };
 
-// --- Custom Engine Logic ---
 const populateCustomGames = () => {
     const season = document.getElementById('season-select').value;
     const week = document.getElementById('week-select').value;
@@ -200,7 +189,6 @@ const populateCustomGames = () => {
     
     weeklyHeader.textContent = `Matchups for ${season} - Week ${week}`;
     
-    // Week 1 check
     if (parseInt(week) === 1) { 
         customGameList.innerHTML = `<div class="dashboard"><p>The Custom Matchup Engine requires prior game data. Select Week 2 or later.</p></div>`; 
         return; 
@@ -235,7 +223,6 @@ const populateCustomGames = () => {
 };
 
 const runCustomPrediction = (homeTeam, awayTeam, season, week, actualWinner) => {
-    // Gather slider values
     const weights = {
         offense_yards: parseInt(document.getElementById('offense-slider').value),
         offense_td: parseInt(document.getElementById('offense-td-slider').value),
@@ -256,11 +243,10 @@ const runCustomPrediction = (homeTeam, awayTeam, season, week, actualWinner) => 
     .then(res => res.json())
     .then(result => {
         if (result.error) { 
-            modalBody.innerHTML = `<h3>Error</h3><p>${result.error}</p>`; 
+            modalBody.innerHTML = `<h3>Error</h3><p style="color: var(--incorrect-color);">${result.error}</p>`; 
             return; 
         }
         
-        // Build Breakdown Bar Charts
         let breakdownHtml = '<div class="breakdown-container">';
         result.breakdown.forEach(item => { 
             breakdownHtml += `
@@ -278,7 +264,6 @@ const runCustomPrediction = (homeTeam, awayTeam, season, week, actualWinner) => 
         }); 
         breakdownHtml += '</div>';
 
-        // Result Display
         let actualWinnerHtml = '';
         if (actualWinner && actualWinner !== 'null') { 
             const isCorrect = result.winner === actualWinner; 
@@ -299,6 +284,10 @@ const runCustomPrediction = (homeTeam, awayTeam, season, week, actualWinner) => 
             <h4>Scoring Breakdown:</h4>
             ${breakdownHtml}
         `;
+    })
+    .catch(err => {
+        console.error("Error generating custom prediction:", err);
+        modalBody.innerHTML = `<h3>Error</h3><p style="color: var(--incorrect-color);">Could not connect to the engine. Please verify the backend is running.</p>`;
     });
 };
 
@@ -353,11 +342,10 @@ const fetchSoSAnalysis = () => {
         })
         .catch(err => { 
             console.error("Error fetching SoS:", err); 
-            resultsDiv.innerHTML = `<p style="color: var(--incorrect-color);">Could not load SoS analysis.</p>`; 
+            resultsDiv.innerHTML = `<p style="color: var(--incorrect-color);">Network error: Could not load SoS analysis.</p>`; 
         });
 };
 
-// --- Leaderboard Logic ---
 const loadLeaderboard = () => {
     const tbody = document.getElementById('leaderboard-body');
     tbody.innerHTML = '<tr><td colspan="5" class="loader">Loading stats...</td></tr>';
@@ -385,20 +373,17 @@ const loadLeaderboard = () => {
         })
         .catch(err => {
             console.error("Error loading leaderboard:", err);
-            tbody.innerHTML = '<tr><td colspan="5">Error loading data.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="color: var(--incorrect-color);">Network error: Failed to fetch leaderboard data.</td></tr>';
         });
 };
 
-// --- Modal Helpers ---
 const openModal = () => modal.style.display = 'block';
 const closeModal = () => modal.style.display = 'none';
 
-// Close modal if user clicks outside of it
 window.onclick = (event) => { 
     if (event.target == modal) closeModal(); 
 };
 
-// --- AI Prediction Details Modal ---
 const showAIDetails = (game) => {
     let breakdownHtml = '';
     if (game.prediction_breakdown) {
@@ -440,9 +425,7 @@ const showAIDetails = (game) => {
     openModal();
 };
 
-// --- Event Handlers (Called by HTML) ---
 const onWeekChange = () => {
-    // Determine which data to fetch based on active tab
     if (document.getElementById('ai-model').classList.contains('active')) fetchAIPredictions();
     else if (document.getElementById('custom-engine').classList.contains('active')) populateCustomGames();
     else if (document.getElementById('sos-analysis').classList.contains('active')) fetchSoSAnalysis();
@@ -453,10 +436,8 @@ const handleSeasonChange = () => {
     const season = document.getElementById('season-select').value;
     const weekSelect = document.getElementById('week-select');
     
-    // Clear old options
     weekSelect.innerHTML = '';
     
-    // Populate weeks for selected season
     if (seasonsData[season]) {
         seasonsData[season].forEach(week => { 
             const option = document.createElement('option'); 
@@ -465,25 +446,30 @@ const handleSeasonChange = () => {
             weekSelect.appendChild(option); 
         });
     }
-    // Refresh data
     onWeekChange();
 };
 
-// --- Initialization ---
 document.addEventListener('DOMContentLoaded', async () => {
     loadUsername();
     
-    // Load Model Stats
     fetch('/get_performance_stats')
         .then(res => res.json())
         .then(stats => { 
             const el = document.getElementById('performance-summary');
-            if(el) {
+            if (stats.error && el) {
+                el.innerHTML = `<p style="color: var(--incorrect-color); text-align: center;">${stats.error}</p>`;
+                return;
+            }
+            if (el) {
                 el.innerHTML = `<h2>Model Performance (Overall)</h2><div class="stats-container"><div class="stat"><span class="stat-value">${stats.accuracy}</span><span class="stat-label">Accuracy</span></div><div class="stat"><span class="stat-value">${stats.simulated_roi}</span><span class="stat-label">ROI</span></div><div class="stat"><span class="stat-value">${stats.total_games_tested}</span><span class="stat-label">Games Tested</span></div></div>`; 
             }
+        })
+        .catch(err => {
+            console.error("Error loading performance stats:", err);
+            const el = document.getElementById('performance-summary');
+            if (el) el.innerHTML = `<p style="color: var(--incorrect-color); text-align: center;">Error loading model metrics. Check server connection.</p>`;
         });
 
-    // Load Initial Data (Current Week + All Seasons + Teams)
     try {
         const [currentWeekInfo, allSeasonsData, teamsData] = await Promise.all([ 
             fetch('/get_current_week_info').then(res => res.json()), 
@@ -494,7 +480,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         seasonsData = allSeasonsData;
         allTeams = teamsData;
         
-        // Populate SoS Team Select once on load
         const teamSelect = document.getElementById('sos-team-select');
         teamSelect.innerHTML = '<option value="">-- Select Team --</option>';
         allTeams.forEach(team => { 
@@ -507,7 +492,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const seasonSelect = document.getElementById('season-select');
         seasonSelect.innerHTML = '';
         
-        // Populate Seasons
         Object.keys(seasonsData).forEach(season => { 
             const option = document.createElement('option'); 
             option.value = season; 
@@ -515,7 +499,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             seasonSelect.appendChild(option); 
         });
 
-        // Set Defaults
         if (currentWeekInfo && !currentWeekInfo.error) {
             seasonSelect.value = currentWeekInfo.season;
             handleSeasonChange(); 
@@ -524,9 +507,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             handleSeasonChange(); 
         }
         
-        // Initial Data Load
         onWeekChange(); 
     } catch (e) {
         console.error("Initialization error:", e);
+        document.querySelector('.container').insertAdjacentHTML('afterbegin', `<div class="dashboard" style="border-color: var(--incorrect-color);"><h3 style="color: var(--incorrect-color); text-align: center;">Connection Error</h3><p style="text-align: center;">Could not reach the server to load NFL data. Please verify the Flask backend is running.</p></div>`);
     }
 });

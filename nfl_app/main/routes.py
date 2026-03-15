@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, jsonify
 import nflreadpy as nfl
 import json
 import os
+from nfl_app.data_loader import team_logos, games_df
 
 main = Blueprint('main', __name__)
 
@@ -28,3 +29,12 @@ def get_performance_stats():
         return jsonify(metrics)
     except FileNotFoundError:
         return jsonify({'error': 'Model metrics not found. Run the training pipeline.'})
+
+@main.route('/get_teams')
+def get_teams():
+    # Try getting teams from logos first
+    teams = sorted(list(team_logos.keys()))
+    # Fallback: scrape them from the schedule if logos are missing
+    if not teams and not games_df.empty:
+        teams = sorted(games_df['home_team'].dropna().unique().tolist())
+    return jsonify(teams)

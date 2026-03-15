@@ -1,16 +1,24 @@
-<div id="custom-engine" class="tab-content">
+<div id="sos-analysis" class="tab-content">
     <div class="dashboard">
-        <h2>Build Your Own Prediction</h2>
-        <p>Adjust the sliders to weigh each factor based on your football philosophy.</p>
-        <div class="slider-section">
-            <div class="slider-group"><label for="offense-slider">Offensive Power (Yards)</label><input type="range" id="offense-slider" min="0" max="100" value="33"></div>
-            <div class="slider-group"><label for="offense-td-slider">Offensive Scoring (TDs)</label><input type="range" id="offense-td-slider" min="0" max="100" value="33"></div>
-            <div class="slider-group"><label for="defense-slider">Defensive Strength (Yards)</label><input type="range" id="defense-slider" min="0" max="100" value="33"></div>
-            <div class="slider-group"><label for="defense-td-slider">Defensive Scoring (TDs Allowed)</label><input type="range" id="defense-td-slider" min="0" max="100" value="33"></div>
-            <div class="slider-group"><label for="turnovers-slider">Turnover Avoidance (Own TOs)</label><input type="range" id="turnovers-slider" min="0" max="100" value="33"></div>
-            <div class="slider-group"><label for="def-turnover-slider">Defensive Playmaking (TOs Forced)</label><input type="range" id="def-turnover-slider" min="0" max="100" value="33"></div>
+        <h2>Strength of Schedule Analysis</h2>
+        <p>Evaluate how tough a team's past opponents have been based on their entering win percentage.</p>
+        <div class="sos-controls">
+            <div class="sos-team-select">
+                <select id="sos-team-select" onchange="fetchSoSAnalysis()"></select>
+            </div>
+            <div class="sos-filter">
+                <input type="radio" id="filter-all" name="sos-filter" value="all" checked onchange="fetchSoSAnalysis()">
+                <label for="filter-all">All Season</label>
+                
+                <input type="radio" id="filter-last5" name="sos-filter" value="last5" onchange="fetchSoSAnalysis()">
+                <label for="filter-last5">Last 5 Games</label>
+                
+                <input type="radio" id="filter-last3" name="sos-filter" value="last3" onchange="fetchSoSAnalysis()">
+                <label for="filter-last3">Last 3 Games</label>
+            </div>
+        </div>
+        <div id="sos-results">
+            <div class="loader">Select a team and week to view analysis.</div>
         </div>
     </div>
-    <h2 id="custom-weekly-header" class="weekly-header"></h2>
-    <main id="custom-game-list"></main>
 </div>

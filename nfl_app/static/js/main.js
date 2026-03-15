@@ -182,7 +182,6 @@ const fetchAIPredictions = async () => {
 
             // Update other tabs that rely on this data
             populateCustomGames();
-            populateSoSTeamSelect();
         })
         .catch(err => {
             console.error(err);
@@ -300,28 +299,6 @@ const runCustomPrediction = (homeTeam, awayTeam, season, week, actualWinner) => 
             <h4>Scoring Breakdown:</h4>
             ${breakdownHtml}
         `;
-    });
-};
-
-// --- Strength of Schedule (SoS) Logic ---
-const populateSoSTeamSelect = () => {
-    const teamSelect = document.getElementById('sos-team-select');
-    // Only populate if we have teams and haven't done it yet
-    if (weeklyMatchups.length === 0 || allTeams.length > 0) return;
-    
-    const teamsInWeek = new Set();
-    weeklyMatchups.forEach(game => { 
-        teamsInWeek.add(game.home_team); 
-        teamsInWeek.add(game.away_team); 
-    });
-    
-    allTeams = Array.from(teamsInWeek).sort();
-    teamSelect.innerHTML = '<option value="">-- Select Team --</option>';
-    allTeams.forEach(team => { 
-        const option = document.createElement('option'); 
-        option.value = team; 
-        option.textContent = team; 
-        teamSelect.appendChild(option); 
     });
 };
 
@@ -506,15 +483,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
-    // Load Initial Data (Current Week + All Seasons)
+    // Load Initial Data (Current Week + All Seasons + Teams)
     try {
-        const [currentWeekInfo, allSeasonsData] = await Promise.all([ 
+        const [currentWeekInfo, allSeasonsData, teamsData] = await Promise.all([ 
             fetch('/get_current_week_info').then(res => res.json()), 
-            fetch('/get_seasons_weeks').then(res => res.json()) 
+            fetch('/get_seasons_weeks').then(res => res.json()),
+            fetch('/get_teams').then(res => res.json())
         ]);
         
         seasonsData = allSeasonsData;
+        allTeams = teamsData;
         
+        // Populate SoS Team Select once on load
+        const teamSelect = document.getElementById('sos-team-select');
+        teamSelect.innerHTML = '<option value="">-- Select Team --</option>';
+        allTeams.forEach(team => { 
+            const option = document.createElement('option'); 
+            option.value = team; 
+            option.textContent = team; 
+            teamSelect.appendChild(option); 
+        });
+
         const seasonSelect = document.getElementById('season-select');
         seasonSelect.innerHTML = '';
         

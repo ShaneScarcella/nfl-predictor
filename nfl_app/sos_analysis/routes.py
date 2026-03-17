@@ -61,7 +61,7 @@ def get_sos_analysis():
     
     team_games = games_df[
         (games_df['season'] == season) & 
-        (games_df['week'] < week) & 
+        (games_df['week'] <= week) & 
         ((games_df['home_team'] == team) | (games_df['away_team'] == team)) & 
         (games_df['result'].notna())
     ].sort_values(by='week', ascending=False).copy()

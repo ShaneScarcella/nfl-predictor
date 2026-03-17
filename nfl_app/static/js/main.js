@@ -321,7 +321,7 @@ const fetchSoSAnalysis = () => {
                 <div class="sos-summary"><h3>Total SoS Score: <span class="sos-score">${data.total_score > 0 ? '+' : ''}${data.total_score}</span></h3></div>
                 <div class="sos-table-container">
                     <table class="sos-table">
-                        <thead><tr><th>Wk</th><th>Opp</th><th>Result</th><th>Margin</th><th>Opp Rec (entering)</th><th>Opp Win%</th><th>Game Value</th></tr></thead>
+                        <thead><tr><th>Wk</th><th>Opp</th><th>Result</th><th>Margin</th><th>Opp Rec (entering)</th><th>Opp Strength</th><th>Game Value</th></tr></thead>
                         <tbody>`;
             
             data.breakdown.forEach(game => {
@@ -333,7 +333,7 @@ const fetchSoSAnalysis = () => {
                         <td class="${resultClass}">${game.result}</td>
                         <td>${game.margin > 0 ? '+' : ''}${game.margin}</td>
                         <td>${game.opp_record}</td>
-                        <td>${game.opp_win_pct}</td>
+                        <td>${game.opp_strength ?? game.opp_win_pct ?? '—'}</td>
                         <td>${game.game_value > 0 ? '+' : ''}${game.game_value}</td>
                     </tr>`;
             });

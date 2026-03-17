@@ -3,6 +3,51 @@ from nfl_app.data_loader import games_df, team_avg_stats_df
 
 sos_analysis = Blueprint('sos_analysis', __name__)
 
+# Typical per-game ranges (rough league bounds) to normalize team stats into a 0-1 strength score
+_STRENGTH = {
+    'off_yards_lo': 200, 'off_yards_hi': 450,
+    'off_tds_lo': 0.5, 'off_tds_hi': 4.0,
+    'turnovers_hi': 3.0,
+    'def_yards_lo': 200, 'def_yards_hi': 450,
+    'def_tds_lo': 0.5, 'def_tds_hi': 4.0,
+    'def_turnovers_hi': 3.0,
+}
+
+
+def _safe_float(val, default):
+    """Return float(val) if val is present and not NaN, else default."""
+    if val is None:
+        return default
+    try:
+        v = float(val)
+        return default if v != v else v  # NaN check
+    except (TypeError, ValueError):
+        return default
+
+
+def _opponent_strength_from_stats(opp_row):
+    """Compute a 0-1 strength score from rolling avg offense/defense stats (higher = stronger team)."""
+    def _norm(val, lo, hi):
+        v = _safe_float(val, None)
+        if v is None:
+            return 0.5
+        return max(0.0, min(1.0, (v - lo) / (hi - lo) if hi != lo else 0.5))
+
+    off_y = _norm(opp_row.get('avg_off_yards'), _STRENGTH['off_yards_lo'], _STRENGTH['off_yards_hi'])
+    off_t = _norm(opp_row.get('avg_off_tds'), _STRENGTH['off_tds_lo'], _STRENGTH['off_tds_hi'])
+    to = _safe_float(opp_row.get('avg_turnovers'), 1.5)
+    off_to = 1.0 - max(0.0, min(1.0, to / _STRENGTH['turnovers_hi']))
+
+    def_y = opp_row.get('avg_def_yards_allowed')
+    def_y_norm = 1.0 - _norm(def_y, _STRENGTH['def_yards_lo'], _STRENGTH['def_yards_hi'])  # fewer allowed = better
+    def_t = opp_row.get('avg_def_tds_allowed')
+    def_t_norm = 1.0 - _norm(def_t, _STRENGTH['def_tds_lo'], _STRENGTH['def_tds_hi'])
+    to_f = _safe_float(opp_row.get('avg_def_turnovers_forced'), 1.0)
+    def_to = max(0.0, min(1.0, to_f / _STRENGTH['def_turnovers_hi']))
+
+    strength = (off_y + off_t + off_to + def_y_norm + def_t_norm + def_to) / 6.0
+    return max(0.0, min(1.0, strength))
+
 @sos_analysis.route('/get_sos_analysis', methods=['GET'])
 def get_sos_analysis():
     if games_df.empty or team_avg_stats_df.empty: 
@@ -44,17 +89,24 @@ def get_sos_analysis():
 
         if not opp_stats.empty:
             opp_row = opp_stats.iloc[0]
-            opp_win_pct = opp_row['entering_win_pct']
+            opp_strength = _opponent_strength_from_stats(opp_row)
             opp_record_str = f"{int(opp_row['entering_wins'])}-{int(opp_row['entering_losses'])}-{int(opp_row['entering_ties'])}"
         else:
-            opp_win_pct = 0.5
+            opp_strength = 0.5
             opp_record_str = "0-0-0"
 
-        # Adjusted SoS: stronger margin impact (divisor 5), cap ±28 so huge games don't dominate, road-win bonus
+        # Quality component: beat good team = more credit; lose to bad team = more penalty (flipped from win%)
+        if result_flag == 1:
+            quality_component = 10.0 * opp_strength
+        elif result_flag == -1:
+            quality_component = -10.0 * (1.0 - opp_strength)  # losing to weak team hurts more
+        else:
+            quality_component = 0.0
+
         capped_margin = max(min(margin, 28), -28)
         margin_component = capped_margin / 5.0
 
-        game_value = (result_flag * (opp_win_pct * 10)) + margin_component
+        game_value = quality_component + margin_component
 
         if result_flag == 1 and not is_home_game:
             game_value += 1.0  # small bonus for road wins
@@ -67,7 +119,7 @@ def get_sos_analysis():
             'result': 'W' if result_flag == 1 else ('L' if result_flag == -1 else 'T'),
             'margin': margin,
             'opp_record': opp_record_str,
-            'opp_win_pct': f"{opp_win_pct:.3f}",
+            'opp_strength': f"{opp_strength:.3f}",
             'game_value': round(game_value, 2)
         })
 

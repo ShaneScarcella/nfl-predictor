@@ -427,7 +427,7 @@ const showAIDetails = (game) => {
 
 const onWeekChange = () => {
     if (document.getElementById('ai-model').classList.contains('active')) fetchAIPredictions();
-    else if (document.getElementById('custom-engine').classList.contains('active')) populateCustomGames();
+    else if (document.getElementById('custom-engine').classList.contains('active')) fetchAIPredictions(); /* loads weeklyMatchups then populateCustomGames() */
     else if (document.getElementById('sos-analysis').classList.contains('active')) fetchSoSAnalysis();
     else if (document.getElementById('leaderboard').classList.contains('active')) loadLeaderboard();
 };

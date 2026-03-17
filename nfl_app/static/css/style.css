@@ -18,11 +18,41 @@ p { color: var(--secondary-text); }
 .user-identity input { background-color: var(--light-bg); border: 1px solid #444; color: #fff; padding: 8px; border-radius: 6px; }
 .user-identity label { font-size: 0.9em; color: var(--secondary-text); }
 
-.tab-nav { display: flex; justify-content: center; margin-bottom: 24px; background-color: var(--light-bg); border-radius: 12px; padding: 5px; }
+.tab-nav { display: flex; justify-content: center; margin-bottom: 0; background-color: var(--light-bg); border-radius: 12px; padding: 5px; }
 .tab-button { flex: 1; text-align: center; padding: 10px 15px; border: none; background-color: transparent; color: var(--secondary-text); font-size: 1em; font-weight: bold; cursor: pointer; border-radius: 8px; transition: background-color 0.3s, color 0.3s; white-space: nowrap; }
 .tab-button.active { background-color: var(--accent-color); color: #fff; }
 .tab-content { display: none; }
 .tab-content.active { display: block; }
+
+/* Sticky Season/Week bar – visible on all tabs, stays at top when scrolling */
+.sticky-filters {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: var(--dark-bg);
+    padding: 12px 0;
+    margin-bottom: 24px;
+    border-bottom: 1px solid #333;
+}
+.sticky-filters-inner {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.sticky-filters-inner label {
+    font-size: 0.9em;
+    color: var(--secondary-text);
+}
+.sticky-filters-inner select {
+    background-color: var(--light-bg);
+    color: var(--primary-text);
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 1em;
+}
 
 .dashboard, .game-card { background-color: var(--medium-bg); border: 1px solid #333; border-radius: 12px; padding: 20px; margin-bottom: 24px; }
 .filters { display: flex; gap: 16px; justify-content: center; margin-bottom: 24px; }

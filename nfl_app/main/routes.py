@@ -17,7 +17,21 @@ def get_current_week_info():
     try:
         current_season = nfl.get_current_season()
         current_week = nfl.get_current_week()
-        return jsonify({'season': current_season, 'week': current_week})
+
+        # Default to a week that exists in the UI (regular season only: 1-18).
+        # During regular season use current week; in post-season/offseason use last regular-season week.
+        if not games_df.empty:
+            reg = games_df[games_df['game_type'] == 'REG']
+            season_weeks = [int(w) for w in reg[reg['season'] == current_season]['week'].dropna().unique()]
+            if season_weeks:
+                valid_weeks = set(season_weeks)
+                default_week = current_week if current_week in valid_weeks else max(season_weeks)
+            else:
+                default_week = min(current_week, 18)
+        else:
+            default_week = min(current_week, 18)
+
+        return jsonify({'season': current_season, 'week': default_week})
     except Exception as e:
         return jsonify({'error': f'Could not determine current week: {e}'})
 

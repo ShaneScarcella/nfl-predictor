@@ -122,3 +122,92 @@ p { color: var(--secondary-text); }
 .leaderboard-table th, .leaderboard-table td { padding: 12px; text-align: left; border-bottom: 1px solid #333; }
 .leaderboard-table th { color: var(--secondary-text); font-size: 0.9em; text-transform: uppercase; }
 .leaderboard-table tr:first-child td { color: var(--highlight-color); font-weight: bold; }
+
+/* My Picks tab */
+.my-picks-dashboard .my-picks-subtitle { color: var(--secondary-text); margin-bottom: 20px; }
+.my-picks-message { margin-bottom: 16px; }
+.my-picks-message.prompt { color: var(--highlight-color); font-style: italic; }
+.my-picks-message.error { color: var(--incorrect-color); }
+.my-picks-empty { text-align: center; padding: 40px 20px; color: var(--secondary-text); font-size: 1.1em; }
+.my-picks-list { margin-top: 8px; }
+.my-picks-group { margin-bottom: 28px; }
+.my-picks-group-title {
+    font-size: 1.1em; color: var(--accent-color); margin-bottom: 12px; padding-bottom: 6px;
+    border-bottom: 1px solid #333;
+}
+.my-picks-cards { display: flex; flex-direction: column; gap: 12px; }
+.my-picks-card {
+    background-color: var(--light-bg); border-radius: 10px; padding: 14px 16px;
+    border: 1px solid #333; display: flex; flex-wrap: wrap; align-items: center;
+    justify-content: space-between; gap: 12px;
+}
+.my-picks-matchup { display: flex; align-items: center; gap: 10px; font-size: 1.05em; }
+.my-picks-team { color: var(--primary-text); }
+.my-picks-team.picked { color: var(--highlight-color); font-weight: bold; }
+.my-picks-vs { color: #666; font-size: 0.9em; }
+.my-picks-badge {
+    font-size: 0.9em; color: var(--secondary-text);
+}
+.my-picks-badge strong { color: var(--accent-color); }
+
+/* My Bets tab */
+.my-bets-dashboard .my-bets-subtitle { color: var(--secondary-text); margin-bottom: 16px; }
+.my-bets-summary { margin-bottom: 16px; }
+.my-bets-message { margin-bottom: 16px; }
+.my-bets-message.prompt { color: var(--highlight-color); font-style: italic; }
+.my-bets-message.error { color: var(--incorrect-color); }
+.my-bets-empty { text-align: center; padding: 40px 20px; color: var(--secondary-text); font-size: 1.1em; }
+
+.my-bets-summary-stats { display: flex; justify-content: space-around; gap: 12px; flex-wrap: wrap; }
+.my-bets-stat {
+    background-color: var(--light-bg);
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 12px 14px;
+    min-width: 170px;
+    text-align: center;
+}
+.my-bets-stat-value { font-size: 1.5em; font-weight: bold; color: #fff; }
+.my-bets-stat-label { font-size: 0.9em; color: var(--secondary-text); }
+
+.my-bets-list { margin-top: 8px; }
+.my-bets-group { margin-bottom: 28px; }
+.my-bets-group-title {
+    font-size: 1.1em; color: var(--accent-color); margin-bottom: 12px; padding-bottom: 6px;
+    border-bottom: 1px solid #333;
+}
+.my-bets-cards { display: flex; flex-direction: column; gap: 12px; }
+.my-bets-card {
+    background-color: var(--light-bg);
+    border-radius: 10px;
+    padding: 14px 16px;
+    border: 1px solid #333;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.my-bets-matchup { display: flex; align-items: center; gap: 10px; font-size: 1.05em; }
+.my-bets-team { color: var(--primary-text); }
+.my-bets-team.picked { color: var(--highlight-color); font-weight: bold; }
+.my-bets-vs { color: #666; font-size: 0.9em; }
+.my-bets-badge { font-size: 0.9em; color: var(--secondary-text); }
+.my-bets-badge strong { color: var(--accent-color); }
+
+.my-bets-pill-wrap { display: flex; align-items: center; gap: 10px; }
+.my-bets-outcome {
+    font-weight: bold;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid #333;
+    background-color: rgba(255, 255, 255, 0.03);
+    font-size: 0.95em;
+    white-space: nowrap;
+}
+.my-bets-outcome.win { color: var(--correct-color); border-color: rgba(74, 222, 128, 0.35); }
+.my-bets-outcome.loss { color: var(--incorrect-color); border-color: rgba(248, 113, 113, 0.35); }
+.my-bets-outcome.pending { color: var(--highlight-color); border-color: rgba(255, 215, 0, 0.35); }
+.my-bets-outcome.push { color: var(--secondary-text); border-color: rgba(160, 160, 160, 0.35); }
+
+.my-bets-profit { font-weight: bold; font-size: 1.1em; color: #fff; white-space: nowrap; }

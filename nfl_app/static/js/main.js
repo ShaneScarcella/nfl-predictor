@@ -5,9 +5,20 @@ let allTeams = [];
 const modal = document.getElementById('details-modal');
 const modalBody = document.getElementById('modal-body');
 
+const updateAuthUI = () => {
+    const usernameEl = document.getElementById('username');
+    const myBetsButton = document.getElementById('my-bets-button');
+    if (!usernameEl || !myBetsButton) return;
+
+    const username = (usernameEl.value || '').trim();
+    myBetsButton.style.display = username ? '' : 'none';
+};
+
 function saveUsername() {
     const name = document.getElementById('username').value;
-    if(name) localStorage.setItem('nfl_username', name);
+    if(name && name.trim()) localStorage.setItem('nfl_username', name.trim());
+    else localStorage.removeItem('nfl_username');
+    updateAuthUI();
 }
 
 function loadUsername() {
@@ -24,6 +35,10 @@ const showTab = (tabId) => {
     
     if (tabId === 'leaderboard') {
         loadLeaderboard();
+    } else if (tabId === 'my-picks') {
+        loadMyPicks();
+    } else if (tabId === 'my-bets') {
+        loadMyBets();
     } else {
         onWeekChange();
     }
@@ -346,6 +361,194 @@ const fetchSoSAnalysis = () => {
         });
 };
 
+const loadMyPicks = () => {
+    const user = document.getElementById('username').value;
+    const messageEl = document.getElementById('my-picks-message');
+    const listEl = document.getElementById('my-picks-list');
+
+    if (!user || !user.trim()) {
+        messageEl.textContent = 'Enter your name at the top to see your picks.';
+        messageEl.className = 'my-picks-message prompt';
+        listEl.innerHTML = '';
+        return;
+    }
+
+    messageEl.textContent = '';
+    messageEl.className = 'my-picks-message';
+    listEl.innerHTML = '<div class="loader">Loading your picks...</div>';
+
+    fetch(`/get_my_picks?user=${encodeURIComponent(user)}`)
+        .then(res => res.json())
+        .then(picks => {
+            if (!picks || picks.length === 0) {
+                listEl.innerHTML = '<div class="my-picks-empty">No picks yet. Make your selections in the AI Model tab!</div>';
+                return;
+            }
+
+            const byGroup = {};
+            picks.forEach(p => {
+                const key = `${p.season}-${p.week}`;
+                if (!byGroup[key]) byGroup[key] = { season: p.season, week: p.week, games: [] };
+                byGroup[key].games.push(p);
+            });
+            const groups = Object.values(byGroup);
+
+            let html = '';
+            groups.forEach(group => {
+                html += `<div class="my-picks-group">
+                    <h3 class="my-picks-group-title">${group.season} Season — Week ${group.week}</h3>
+                    <div class="my-picks-cards">`;
+                group.games.forEach(game => {
+                    const awayIsPick = game.pick === game.away_team;
+                    const homeIsPick = game.pick === game.home_team;
+                    html += `
+                        <div class="my-picks-card">
+                            <div class="my-picks-matchup">
+                                <span class="my-picks-team ${awayIsPick ? 'picked' : ''}">${game.away_team}</span>
+                                <span class="my-picks-vs">@</span>
+                                <span class="my-picks-team ${homeIsPick ? 'picked' : ''}">${game.home_team}</span>
+                            </div>
+                            <div class="my-picks-badge">You picked <strong>${game.pick}</strong></div>
+                        </div>`;
+                });
+                html += '</div></div>';
+            });
+            listEl.innerHTML = html;
+        })
+        .catch(err => {
+            console.error('Error loading my picks:', err);
+            listEl.innerHTML = '<div class="my-picks-message error">Could not load your picks. Check your connection.</div>';
+        });
+};
+
+const loadMyBets = () => {
+    const user = document.getElementById('username').value;
+    const season = document.getElementById('season-select').value;
+    const week = document.getElementById('week-select').value;
+
+    const messageEl = document.getElementById('my-bets-message');
+    const listEl = document.getElementById('my-bets-list');
+    const summaryEl = document.getElementById('my-bets-summary');
+
+    const formatMoney = (n) => {
+        const num = Number(n || 0);
+        if (num === 0) return '$0.00';
+        const abs = Math.abs(num).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return num > 0 ? `+$${abs}` : `-$${abs}`;
+    };
+
+    if (!user || !user.trim()) {
+        if (summaryEl) summaryEl.innerHTML = '';
+        messageEl.textContent = 'Enter your name to see your bets.';
+        messageEl.className = 'my-bets-message prompt';
+        listEl.innerHTML = '';
+        return;
+    }
+
+    messageEl.textContent = '';
+    messageEl.className = 'my-bets-message';
+    summaryEl.innerHTML = '';
+    listEl.innerHTML = '<div class="loader">Loading your bets...</div>';
+
+    const params = new URLSearchParams();
+    params.append('user', user.trim());
+    if (season) params.append('season', season);
+    if (week) params.append('week', week);
+
+    fetch(`/get_my_bets?${params.toString()}`)
+        .then(res => res.json())
+        .then(bets => {
+            if (!bets || bets.length === 0) {
+                listEl.innerHTML = '<div class="my-bets-empty">No bets yet for this week. Place picks in the AI Model tab first.</div>';
+                return;
+            }
+
+            let wins = 0;
+            let losses = 0;
+            let pending = 0;
+            let pushes = 0;
+            let totalProfit = 0;
+
+            bets.forEach(b => {
+                totalProfit += Number(b.profit || 0);
+                if (b.outcome === 'Win') wins++;
+                else if (b.outcome === 'Loss') losses++;
+                else if (b.outcome === 'Pending') pending++;
+                else if (b.outcome === 'Push') pushes++;
+            });
+
+            const record = `${wins}-${losses}`;
+            const profitText = formatMoney(totalProfit);
+
+            summaryEl.innerHTML = `
+                <div class="my-bets-summary-stats">
+                    <div class="my-bets-stat">
+                        <div class="my-bets-stat-value">${record}</div>
+                        <div class="my-bets-stat-label">Record</div>
+                    </div>
+                    <div class="my-bets-stat">
+                        <div class="my-bets-stat-value">${profitText}</div>
+                        <div class="my-bets-stat-label">Profit</div>
+                    </div>
+                    <div class="my-bets-stat">
+                        <div class="my-bets-stat-value">${pending}</div>
+                        <div class="my-bets-stat-label">Pending</div>
+                    </div>
+                </div>
+            `;
+
+            const byGroup = {};
+            bets.forEach(b => {
+                const key = `${b.season}-${b.week}`;
+                if (!byGroup[key]) byGroup[key] = { season: b.season, week: b.week, bets: [] };
+                byGroup[key].bets.push(b);
+            });
+
+            const groups = Object.values(byGroup);
+            let html = '';
+            groups.forEach(group => {
+                html += `<div class="my-bets-group">
+                    <h3 class="my-bets-group-title">${group.season} Season — Week ${group.week}</h3>
+                    <div class="my-bets-cards">`;
+
+                group.bets.forEach(b => {
+                    const outcome = b.outcome || 'Pending';
+                    const profitTextForRow = outcome === 'Pending' ? '—' : formatMoney(b.profit);
+
+                    const awayPicked = b.pick === b.away_team;
+                    const homePicked = b.pick === b.home_team;
+
+                    html += `
+                        <div class="my-bets-card">
+                            <div class="my-bets-pill-wrap">
+                                <div class="my-bets-matchup">
+                                    <span class="my-bets-team ${awayPicked ? 'picked' : ''}">${b.away_team}</span>
+                                    <span class="my-bets-vs">@</span>
+                                    <span class="my-bets-team ${homePicked ? 'picked' : ''}">${b.home_team}</span>
+                                </div>
+                            </div>
+                            <div class="my-bets-pill-wrap" style="justify-content:flex-end;">
+                                <div class="my-bets-badge">Bet: <strong>${b.pick}</strong></div>
+                                <div class="my-bets-outcome ${outcome.toLowerCase()}">${outcome}</div>
+                                <div class="my-bets-profit">${profitTextForRow}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += '</div></div>';
+            });
+
+            listEl.innerHTML = html;
+        })
+        .catch(err => {
+            console.error('Error loading my bets:', err);
+            messageEl.textContent = 'Could not load your bets. Check your connection.';
+            messageEl.className = 'my-bets-message error';
+            listEl.innerHTML = '';
+        });
+};
+
 const loadLeaderboard = () => {
     const tbody = document.getElementById('leaderboard-body');
     tbody.innerHTML = '<tr><td colspan="5" class="loader">Loading stats...</td></tr>';
@@ -451,6 +654,7 @@ const handleSeasonChange = () => {
 
 document.addEventListener('DOMContentLoaded', async () => {
     loadUsername();
+    updateAuthUI();
     
     fetch('/get_performance_stats')
         .then(res => res.json())

@@ -31,6 +31,33 @@ def ensure_picks_table_exists():
     conn.commit()
     conn.close()
 
+BET_AMOUNT = 100
+
+def determine_bet_outcome(pick, home_team, away_team, result, home_moneyline, away_moneyline, bet_amount=BET_AMOUNT):
+    """
+    Calculate bet outcome/profit for a single pick.
+    Result is from games_df and represents the signed point differential (positive => home won, negative => away won).
+    """
+    # Future games (or missing data) -> pending.
+    if pd.isna(result):
+        return 'Pending', 0, 0.0
+
+    # Ties
+    if result == 0:
+        return 'Push', 0, 0.0
+
+    home_won = result > 0
+    away_won = result < 0
+
+    is_correct = (pick == home_team and home_won) or (pick == away_team and away_won)
+    if is_correct:
+        odds = home_moneyline if pick == home_team else away_moneyline
+        profit = calculate_profit(odds, bet_amount) if pd.notna(odds) else 0.0
+        return 'Win', 1, float(profit)
+
+    # Incorrect pick
+    return 'Loss', 0, float(-bet_amount)
+
 @user_picks.route('/save_pick', methods=['POST'])
 def save_pick():
     ensure_picks_table_exists()
@@ -81,6 +108,99 @@ def get_user_picks():
     conn.close()
 
     return jsonify([dict(ix) for ix in picks])
+
+@user_picks.route('/get_my_picks')
+def get_my_picks():
+    """Return all picks for a user, grouped by season and week (newest first)."""
+    ensure_picks_table_exists()
+    user = request.args.get('user')
+    if not user:
+        return jsonify([])
+
+    conn = get_db_connection()
+    rows = conn.execute(
+        'SELECT season, week, home_team, away_team, pick FROM picks WHERE user = ? ORDER BY season DESC, week DESC',
+        (user,)
+    ).fetchall()
+    conn.close()
+
+    return jsonify([dict(ix) for ix in rows])
+
+@user_picks.route('/get_my_bets', methods=['GET'])
+def get_my_bets():
+    """
+    Return all bets for a user, optionally filtered by season/week.
+    Each bet includes outcome (Win/Loss/Pending/Push) and profit assuming $100 per bet.
+    """
+    ensure_picks_table_exists()
+
+    user = request.args.get('user')
+    season = request.args.get('season', type=int)
+    week = request.args.get('week', type=int)
+
+    if not user:
+        return jsonify([])
+
+    conn = get_db_connection()
+    try:
+        query = 'SELECT season, week, home_team, away_team, pick FROM picks WHERE user = ?'
+        params = [user]
+        if season is not None:
+            query += ' AND season = ?'
+            params.append(season)
+        if week is not None:
+            query += ' AND week = ?'
+            params.append(week)
+        query += ' ORDER BY season DESC, week DESC'
+
+        rows = conn.execute(query, params).fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        return jsonify([])
+
+    bets_df = pd.DataFrame([dict(ix) for ix in rows])
+    games_needed = games_df[['season', 'week', 'home_team', 'away_team', 'result', 'home_moneyline', 'away_moneyline']]
+    merged_df = pd.merge(
+        bets_df,
+        games_needed,
+        on=['season', 'week', 'home_team', 'away_team'],
+        how='left',
+        validate='many_to_one'
+    )
+
+    merged_df[['outcome', 'points', 'profit']] = merged_df.apply(
+        lambda row: pd.Series(
+            determine_bet_outcome(
+                pick=row['pick'],
+                home_team=row['home_team'],
+                away_team=row['away_team'],
+                result=row['result'],
+                home_moneyline=row['home_moneyline'],
+                away_moneyline=row['away_moneyline'],
+            )
+        ),
+        axis=1
+    )
+
+    bets_list = []
+    for _, row in merged_df.iterrows():
+        bets_list.append({
+            'season': int(row['season']),
+            'week': int(row['week']),
+            'away_team': row['away_team'],
+            'home_team': row['home_team'],
+            'pick': row['pick'],
+            'outcome': row['outcome'],
+            'points': int(row['points']),
+            'profit': float(row['profit']),
+            'result': None if pd.isna(row['result']) else float(row['result']),
+            'home_moneyline': None if pd.isna(row['home_moneyline']) else float(row['home_moneyline']),
+            'away_moneyline': None if pd.isna(row['away_moneyline']) else float(row['away_moneyline']),
+        })
+
+    return jsonify(bets_list)
 
 @user_picks.route('/leaderboard')
 def leaderboard():

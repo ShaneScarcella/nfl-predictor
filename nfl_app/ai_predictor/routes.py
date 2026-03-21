@@ -77,15 +77,19 @@ def get_predictions():
             if pd.notna(row['result']):
                 actual_winner = row['home_team'] if row['result'] > 0 else row['away_team']
                 
-            output_data.append({ 
-                'home_team': row['home_team'], 
-                'away_team': row['away_team'], 
-                'predicted_winner': predicted_winner, 
-                'actual_winner': actual_winner, 
-                'spread_line': row['spread_line'], 
-                'confidence': row['win_probability'], 
-                'home_logo': team_logos.get(row['home_team']), 
-                'away_logo': team_logos.get(row['away_team']) 
+            hm = row['home_moneyline'] if pd.notna(row.get('home_moneyline')) else None
+            am = row['away_moneyline'] if pd.notna(row.get('away_moneyline')) else None
+            output_data.append({
+                'home_team': row['home_team'],
+                'away_team': row['away_team'],
+                'predicted_winner': predicted_winner,
+                'actual_winner': actual_winner,
+                'spread_line': row['spread_line'],
+                'confidence': row['win_probability'],
+                'home_logo': team_logos.get(row['home_team']),
+                'away_logo': team_logos.get(row['away_team']),
+                'home_moneyline': float(hm) if hm is not None else None,
+                'away_moneyline': float(am) if am is not None else None,
             })
             
     return jsonify({'predictions': output_data, 'weekly_stats': weekly_stats})

@@ -101,6 +101,17 @@ const loadUserPicks = async () => {
     }
 };
 
+window.NFLPredictorCore = {
+    getWeeklyMatchups: () => weeklyMatchups,
+    loadUserPicks,
+    getSeasonWeek: () => {
+        const s = document.getElementById('season-select');
+        const w = document.getElementById('week-select');
+        return { season: s?.value, week: w?.value };
+    },
+    showTab,
+};
+
 const fetchAIPredictions = async () => {
     const season = document.getElementById('season-select').value;
     const week = document.getElementById('week-select').value;

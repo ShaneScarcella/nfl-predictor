@@ -1,0 +1,41 @@
+<aside id="community-chat-sidebar" class="chat-sidebar" aria-label="Community chat">
+    <header class="chat-sidebar-header">
+        <h2 class="chat-title">Community</h2>
+        <div class="chat-section-rule">General chat</div>
+    </header>
+
+    <div class="chat-messages-scroll">
+        <div id="chat-messages" class="chat-messages"></div>
+    </div>
+
+    <footer class="chat-composer-wrap">
+        <div class="chat-quick-actions">
+            <button type="button" id="chat-share-pick-btn" class="chat-pill-btn">
+                <span class="chat-pill-icon" aria-hidden="true">&#127942;</span>
+                Share pick
+            </button>
+            <button type="button" id="chat-stats-btn" class="chat-pill-btn">
+                <span class="chat-pill-icon" aria-hidden="true">&#128202;</span>
+                Stats
+            </button>
+        </div>
+        <div class="chat-input-row">
+            <input type="text" id="chat-input" class="chat-input" placeholder="Send a message to the community..." autocomplete="off" maxlength="2000">
+            <button type="button" id="chat-send-btn" class="chat-send-btn" aria-label="Send message">
+                <span class="chat-send-icon" aria-hidden="true"></span>
+            </button>
+        </div>
+    </footer>
+</aside>
+
+<div id="chat-share-modal" class="chat-share-modal" aria-hidden="true">
+    <div class="chat-share-modal-inner">
+        <div class="chat-share-modal-head">
+            <h3>Share a pick</h3>
+            <button type="button" id="chat-share-modal-close" class="chat-share-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <p class="chat-share-modal-hint"><strong>Lock</strong> is a pick you stand behind. <strong>Risky</strong> asks how confident you are before posting.</p>
+        <div id="chat-share-list" class="chat-share-list"></div>
+        <p id="chat-share-empty" class="chat-share-empty" hidden>No picks for this week yet. Make picks on the AI Model tab first.</p>
+    </div>
+</div>

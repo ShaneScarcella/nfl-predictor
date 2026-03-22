@@ -54,10 +54,12 @@ const savePick = (game, selectedTeam, teamElement, opponentElement) => {
     teamElement.classList.add('selected-pick');
     opponentElement.classList.remove('selected-pick');
 
+    const seasonFromUi = parseInt(document.getElementById('season-select').value, 10);
+    const weekFromUi = parseInt(document.getElementById('week-select').value, 10);
     const payload = {
         user: user,
-        season: parseInt(document.getElementById('season-select').value),
-        week: parseInt(document.getElementById('week-select').value),
+        season: Number.isFinite(game.season) ? game.season : seasonFromUi,
+        week: Number.isFinite(game.week) ? game.week : weekFromUi,
         home_team: game.home_team,
         away_team: game.away_team,
         pick: selectedTeam

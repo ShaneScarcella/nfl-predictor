@@ -80,6 +80,8 @@ def get_predictions():
             hm = row['home_moneyline'] if pd.notna(row.get('home_moneyline')) else None
             am = row['away_moneyline'] if pd.notna(row.get('away_moneyline')) else None
             output_data.append({
+                'season': int(season),
+                'week': int(row['week']),
                 'home_team': row['home_team'],
                 'away_team': row['away_team'],
                 'predicted_winner': predicted_winner,

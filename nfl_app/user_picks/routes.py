@@ -29,9 +29,69 @@ def ensure_picks_table_exists():
         )
     ''')
     conn.commit()
+    _repair_misaligned_pick_weeks(conn)
     conn.close()
 
+
+def _repair_misaligned_pick_weeks(conn):
+    """Fix picks whose week does not match the REG schedule (e.g. race saved week 18 for a Week 1 game)."""
+    rows = conn.execute(
+        'SELECT id, user, season, week, home_team, away_team FROM picks'
+    ).fetchall()
+    for r in rows:
+        rid, user, season, week, home_team, away_team = (
+            r['id'],
+            r['user'],
+            r['season'],
+            r['week'],
+            r['home_team'],
+            r['away_team'],
+        )
+        reg = games_df[
+            (games_df['game_type'] == 'REG')
+            & (games_df['season'] == season)
+            & (games_df['home_team'] == home_team)
+            & (games_df['away_team'] == away_team)
+        ]
+        if reg.empty or len(reg['week'].dropna().unique()) != 1:
+            continue
+        cw = int(reg['week'].iloc[0])
+        if int(week) == cw:
+            continue
+        dup = conn.execute(
+            'SELECT id FROM picks WHERE user = ? AND season = ? AND week = ? AND home_team = ? AND away_team = ?',
+            (user, season, cw, home_team, away_team),
+        ).fetchone()
+        if dup:
+            conn.execute('DELETE FROM picks WHERE id = ?', (rid,))
+        else:
+            conn.execute('UPDATE picks SET week = ? WHERE id = ?', (cw, rid))
+    conn.commit()
+
 BET_AMOUNT = 100
+
+_REG_GAME_COLS = ['season', 'week', 'home_team', 'away_team', 'result', 'home_moneyline', 'away_moneyline']
+
+
+def _fill_reg_game_fallback(merged_df):
+    """When merge on (season, week, teams) misses, attach the single REG row for that season + matchup."""
+    reg_games = games_df[games_df['game_type'] == 'REG'][_REG_GAME_COLS]
+    for idx in merged_df.index:
+        if pd.isna(merged_df.at[idx, 'result']):
+            r = merged_df.loc[idx]
+            alt = reg_games[
+                (reg_games['season'] == r['season'])
+                & (reg_games['home_team'] == r['home_team'])
+                & (reg_games['away_team'] == r['away_team'])
+            ]
+            if len(alt) == 1:
+                a = alt.iloc[0]
+                merged_df.at[idx, 'result'] = a['result']
+                merged_df.at[idx, 'home_moneyline'] = a['home_moneyline']
+                merged_df.at[idx, 'away_moneyline'] = a['away_moneyline']
+                merged_df.at[idx, 'week'] = int(a['week'])
+    return merged_df
+
 
 def determine_bet_outcome(pick, home_team, away_team, result, home_moneyline, away_moneyline, bet_amount=BET_AMOUNT):
     """
@@ -76,8 +136,25 @@ def save_pick():
     if not user or not pick:
         return jsonify({'error': 'User and Pick are required.'})
 
+    reg_rows = games_df[
+        (games_df['game_type'] == 'REG')
+        & (games_df['season'] == season)
+        & (games_df['home_team'] == home_team)
+        & (games_df['away_team'] == away_team)
+    ]
+    if not reg_rows.empty:
+        week = int(reg_rows['week'].min())
+
     conn = get_db_connection()
     try:
+        if not reg_rows.empty:
+            conn.execute(
+                '''
+                DELETE FROM picks
+                WHERE user = ? AND season = ? AND home_team = ? AND away_team = ? AND week != ?
+                ''',
+                (user, season, home_team, away_team, week),
+            )
         conn.execute('''
             INSERT INTO picks (user, season, week, home_team, away_team, pick)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -170,6 +247,8 @@ def get_my_bets():
         validate='many_to_one'
     )
 
+    merged_df = _fill_reg_game_fallback(merged_df)
+
     merged_df[['outcome', 'points', 'profit']] = merged_df.apply(
         lambda row: pd.Series(
             determine_bet_outcome(
@@ -214,9 +293,11 @@ def leaderboard():
         return jsonify([])
 
     cols_needed = ['season', 'week', 'home_team', 'away_team', 'result', 'home_moneyline', 'away_moneyline']
-    results_df = games_df.dropna(subset=['result'])[cols_needed]
+    results_df = games_df[(games_df['game_type'] == 'REG')].dropna(subset=['result'])[cols_needed]
 
-    merged_df = pd.merge(picks_df, results_df, on=['season', 'week', 'home_team', 'away_team'], how='inner')
+    merged_df = pd.merge(picks_df, results_df, on=['season', 'week', 'home_team', 'away_team'], how='left')
+    merged_df = _fill_reg_game_fallback(merged_df)
+    merged_df = merged_df.dropna(subset=['result'])
 
     def calculate_pick_outcome(row):
         points = 0

@@ -89,6 +89,65 @@
         return t.slice(0, 2).toUpperCase();
     }
 
+    function getChatScrollEl() {
+        const side = document.getElementById('community-chat-sidebar');
+        return side && side.querySelector('.chat-messages-scroll');
+    }
+
+    function scrollChatToBottom() {
+        const sc = getChatScrollEl();
+        if (!sc) return;
+        requestAnimationFrame(() => {
+            sc.scrollTop = sc.scrollHeight;
+        });
+    }
+
+    /**
+     * True if the message list can scroll further in the direction of deltaY
+     * (or if it has no overflow, so the page should receive the wheel instead).
+     */
+    function chatScrollCanAbsorbWheel(scrollEl, deltaY) {
+        const { scrollTop, scrollHeight, clientHeight } = scrollEl;
+        const epsilon = 2;
+        if (scrollHeight <= clientHeight + epsilon) {
+            return false;
+        }
+        const atTop = scrollTop <= epsilon;
+        const atBottom = scrollTop + clientHeight >= scrollHeight - epsilon;
+        if (deltaY < 0 && atTop) return false;
+        if (deltaY > 0 && atBottom) return false;
+        return true;
+    }
+
+    /**
+     * Wheel over the header/composer does not hit .chat-messages-scroll, so the browser
+     * scrolls the page. Route those events to the message list when appropriate.
+     */
+    function setupSidebarWheelRouting() {
+        const side = document.getElementById('community-chat-sidebar');
+        if (!side) return;
+
+        side.addEventListener(
+            'wheel',
+            (e) => {
+                const scrollEl = getChatScrollEl();
+                if (!scrollEl) return;
+
+                if (scrollEl.contains(e.target)) {
+                    return;
+                }
+
+                if (!chatScrollCanAbsorbWheel(scrollEl, e.deltaY)) {
+                    return;
+                }
+
+                scrollEl.scrollTop += e.deltaY;
+                e.preventDefault();
+            },
+            { passive: false }
+        );
+    }
+
     function renderBetCard(bet) {
         const variantClass = betCardVariantClass(bet);
         const thumb = bet.team_logo
@@ -140,7 +199,7 @@
                 ${inner}
             </div>`;
         el.appendChild(row);
-        el.scrollTop = el.scrollHeight;
+        scrollChatToBottom();
     }
 
     function clearEmptyPlaceholder() {
@@ -180,6 +239,7 @@
             el.innerHTML =
                 '<p class="chat-share-empty" style="color:#f87171;">Could not load chat. Is the server running?</p>';
         }
+        scrollChatToBottom();
     }
 
     async function pollNew() {
@@ -243,6 +303,7 @@
         if (toggle) {
             toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
         }
+        if (open) scrollChatToBottom();
     }
 
     function setupDrawer() {
@@ -429,6 +490,7 @@
     function initCommunityChat() {
         setupDrawer();
         setupComposer();
+        setupSidebarWheelRouting();
         loadInitialMessages().then(() => startPolling());
     }
 

@@ -4,7 +4,14 @@
         <p>Evaluate how tough a team's past opponents have been based on their entering win percentage.</p>
         <div class="sos-controls">
             <div class="sos-team-select">
+                <label for="sos-team-select" class="sos-select-label">Team</label>
                 <select id="sos-team-select" onchange="fetchSoSAnalysis()"></select>
+            </div>
+            <div class="sos-team-select sos-compare-select-wrap">
+                <label for="sos-compare-team-select" class="sos-select-label">Compare to</label>
+                <select id="sos-compare-team-select" onchange="fetchSoSAnalysis()">
+                    <option value="">— None —</option>
+                </select>
             </div>
             <div class="sos-filter">
                 <input type="radio" id="filter-all" name="sos-filter" value="all" checked onchange="fetchSoSAnalysis()">
@@ -17,8 +24,18 @@
                 <label for="filter-last3">Last 3 Games</label>
             </div>
         </div>
-        <div id="sos-results">
-            <div class="loader">Select a team and week to view analysis.</div>
+        <div id="sos-compare-note" class="sos-compare-note" role="status"></div>
+        <div class="sos-results-layout">
+            <div class="sos-results-column sos-results-primary">
+                <div id="sos-results">
+                    <div class="loader">Select a team and week to view analysis.</div>
+                </div>
+            </div>
+            <div class="sos-results-column sos-results-compare">
+                <div id="sos-compare-results" class="sos-compare-results-inner">
+                    <div class="sos-compare-placeholder">Select a comparison team to see their SoS for the same season, week, and filter.</div>
+                </div>
+            </div>
         </div>
     </div>
 </div>

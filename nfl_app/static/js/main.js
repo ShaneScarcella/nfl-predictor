@@ -319,42 +319,28 @@ const runCustomPrediction = (homeTeam, awayTeam, season, week, actualWinner) => 
     });
 };
 
-const fetchSoSAnalysis = () => {
-    const season = document.getElementById('season-select').value;
-    const week = document.getElementById('week-select').value;
-    const team = document.getElementById('sos-team-select').value;
-    const filter = document.querySelector('input[name="sos-filter"]:checked').value;
-    const resultsDiv = document.getElementById('sos-results');
-    
-    if (!team || !season || !week) { 
-        resultsDiv.innerHTML = `<div class="loader">Select a team and week.</div>`; 
-        return; 
+const buildSoSPanelHtml = (data, teamLabel) => {
+    if (data.error) {
+        return `<p class="sos-panel-error">${data.error}</p>`;
     }
-    
-    resultsDiv.innerHTML = `<div class="loader">Analyzing Strength of Schedule for ${team}...</div>`;
-    
-    fetch(`/get_sos_analysis?team=${team}&season=${season}&week=${week}&filter=${filter}`)
-        .then(res => res.json())
-        .then(data => {
-            if (data.error) { 
-                resultsDiv.innerHTML = `<p style="color: var(--incorrect-color);">${data.error}</p>`; 
-                return; 
-            }
-            if (data.message) { 
-                resultsDiv.innerHTML = `<div class="sos-summary"><p>${data.message}</p></div>`; 
-                return; 
-            }
-            
-            let tableHtml = `
-                <div class="sos-summary"><h3>Total SoS Score: <span class="sos-score">${data.total_score > 0 ? '+' : ''}${data.total_score}</span></h3></div>
-                <div class="sos-table-container">
-                    <table class="sos-table">
-                        <thead><tr><th>Wk</th><th>Opp</th><th>Result</th><th>Margin</th><th>Opp Rec (entering)</th><th>Opp Strength</th><th>Game Value</th></tr></thead>
-                        <tbody>`;
-            
-            data.breakdown.forEach(game => {
-                const resultClass = game.result === 'W' ? 'sos-win' : (game.result === 'L' ? 'sos-loss' : '');
-                tableHtml += `
+    if (data.message) {
+        return `<div class="sos-summary"><p>${data.message}</p></div>`;
+    }
+    const gamesCount = data.games_considered != null ? data.games_considered : (data.breakdown?.length ?? 0);
+    const scorePrefix = data.total_score > 0 ? '+' : '';
+    let tableHtml = `
+        <div class="sos-summary">
+            <p class="sos-panel-team">${teamLabel}</p>
+            <h3>Total SoS Score: <span class="sos-score">${scorePrefix}${data.total_score}</span></h3>
+            <p class="sos-games-count">Games counted: ${gamesCount}</p>
+        </div>
+        <div class="sos-table-container">
+            <table class="sos-table">
+                <thead><tr><th>Wk</th><th>Opp</th><th>Result</th><th>Margin</th><th>Opp Rec (entering)</th><th>Opp Strength</th><th>Game Value</th></tr></thead>
+                <tbody>`;
+    (data.breakdown || []).forEach(game => {
+        const resultClass = game.result === 'W' ? 'sos-win' : (game.result === 'L' ? 'sos-loss' : '');
+        tableHtml += `
                     <tr>
                         <td>${game.week}</td>
                         <td>${game.opponent}</td>
@@ -364,13 +350,105 @@ const fetchSoSAnalysis = () => {
                         <td>${game.opp_strength ?? game.opp_win_pct ?? '—'}</td>
                         <td>${game.game_value > 0 ? '+' : ''}${game.game_value}</td>
                     </tr>`;
+    });
+    tableHtml += `</tbody></table></div>`;
+    return tableHtml;
+};
+
+const sosFilterDescription = () => {
+    const filter = document.querySelector('input[name="sos-filter"]:checked')?.value || 'all';
+    if (filter === 'last5') return 'last 5 completed games (or fewer if not available)';
+    if (filter === 'last3') return 'last 3 completed games (or fewer if not available)';
+    return 'all completed games through the selected week';
+};
+
+const fetchSoSAnalysis = () => {
+    const season = document.getElementById('season-select').value;
+    const week = document.getElementById('week-select').value;
+    const team = document.getElementById('sos-team-select').value;
+    const compareTeam = document.getElementById('sos-compare-team-select').value;
+    const filter = document.querySelector('input[name="sos-filter"]:checked').value;
+    const resultsDiv = document.getElementById('sos-results');
+    const compareDiv = document.getElementById('sos-compare-results');
+    const noteEl = document.getElementById('sos-compare-note');
+
+    const clearNote = () => { if (noteEl) noteEl.textContent = ''; };
+
+    if (!team || !season || !week) {
+        resultsDiv.innerHTML = `<div class="loader">Select a team and week.</div>`;
+        if (compareDiv) {
+            compareDiv.innerHTML = `<div class="sos-compare-placeholder">Select a comparison team to see their SoS for the same season, week, and filter.</div>`;
+        }
+        clearNote();
+        return;
+    }
+
+    const baseParams = `season=${encodeURIComponent(season)}&week=${encodeURIComponent(week)}&filter=${encodeURIComponent(filter)}`;
+    const primaryUrl = `/get_sos_analysis?${baseParams}&team=${encodeURIComponent(team)}`;
+
+    resultsDiv.innerHTML = `<div class="loader">Analyzing Strength of Schedule for ${team}...</div>`;
+
+    const applyComparePlaceholder = (html) => {
+        if (compareDiv) compareDiv.innerHTML = html;
+    };
+
+    if (!compareTeam) {
+        applyComparePlaceholder(`<div class="sos-compare-placeholder">Select a comparison team to see their SoS for the same season, week, and filter.</div>`);
+        clearNote();
+        fetch(primaryUrl)
+            .then(res => res.json())
+            .then(data => {
+                resultsDiv.innerHTML = buildSoSPanelHtml(data, team);
+            })
+            .catch(err => {
+                console.error("Error fetching SoS:", err);
+                resultsDiv.innerHTML = `<p class="sos-panel-error">Network error: Could not load SoS analysis.</p>`;
             });
-            tableHtml += `</tbody></table></div>`;
-            resultsDiv.innerHTML = tableHtml;
+        return;
+    }
+
+    if (compareTeam === team) {
+        applyComparePlaceholder(`<p class="sos-compare-hint">Choose a different team than the primary selection.</p>`);
+        clearNote();
+        fetch(primaryUrl)
+            .then(res => res.json())
+            .then(data => {
+                resultsDiv.innerHTML = buildSoSPanelHtml(data, team);
+            })
+            .catch(err => {
+                console.error("Error fetching SoS:", err);
+                resultsDiv.innerHTML = `<p class="sos-panel-error">Network error: Could not load SoS analysis.</p>`;
+            });
+        return;
+    }
+
+    applyComparePlaceholder(`<div class="loader">Loading comparison for ${compareTeam}...</div>`);
+
+    Promise.all([
+        fetch(primaryUrl).then(res => res.json()),
+        fetch(`/get_sos_analysis?${baseParams}&team=${encodeURIComponent(compareTeam)}`).then(res => res.json())
+    ])
+        .then(([primaryData, compareData]) => {
+            resultsDiv.innerHTML = buildSoSPanelHtml(primaryData, team);
+            compareDiv.innerHTML = buildSoSPanelHtml(compareData, compareTeam);
+
+            const n1 = primaryData.games_considered ?? primaryData.breakdown?.length;
+            const n2 = compareData.games_considered ?? compareData.breakdown?.length;
+            const hasBoth =
+                !primaryData.error && !compareData.error && !primaryData.message && !compareData.message;
+            if (noteEl && hasBoth && n1 != null && n2 != null && n1 !== n2) {
+                const filterDesc = sosFilterDescription();
+                noteEl.textContent =
+                    `Each team uses the ${filterDesc} through Week ${week}. ${team}: ${n1} game(s); ${compareTeam}: ${n2} game(s).`;
+            } else {
+                clearNote();
+            }
         })
-        .catch(err => { 
-            console.error("Error fetching SoS:", err); 
-            resultsDiv.innerHTML = `<p style="color: var(--incorrect-color);">Network error: Could not load SoS analysis.</p>`; 
+        .catch(err => {
+            console.error("Error fetching SoS:", err);
+            resultsDiv.innerHTML = `<p class="sos-panel-error">Network error: Could not load SoS analysis.</p>`;
+            compareDiv.innerHTML = `<p class="sos-panel-error">Network error: Could not load comparison.</p>`;
+            clearNote();
         });
 };
 
@@ -705,6 +783,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             option.textContent = team; 
             teamSelect.appendChild(option); 
         });
+
+        const compareSelect = document.getElementById('sos-compare-team-select');
+        if (compareSelect) {
+            compareSelect.innerHTML = '<option value="">— None —</option>';
+            allTeams.forEach(team => {
+                const option = document.createElement('option');
+                option.value = team;
+                option.textContent = team;
+                compareSelect.appendChild(option);
+            });
+        }
 
         const seasonSelect = document.getElementById('season-select');
         seasonSelect.innerHTML = '';

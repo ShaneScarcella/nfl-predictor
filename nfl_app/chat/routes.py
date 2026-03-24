@@ -3,6 +3,7 @@ import sqlite3
 import time
 import os
 from flask import Blueprint, jsonify, request
+from flask_login import login_required, current_user
 
 chat = Blueprint('chat', __name__)
 
@@ -88,14 +89,12 @@ def get_messages():
 
 
 @chat.route('/messages', methods=['POST'])
+@login_required
 def post_message():
     ensure_chat_table_exists()
     data = request.get_json(silent=True) or {}
-    user = (data.get('user') or '').strip()
+    user = current_user.username
     message_type = (data.get('message_type') or '').strip().lower()
-
-    if not user:
-        return jsonify({'error': 'User is required.'}), 400
     if message_type not in ('text', 'bet'):
         return jsonify({'error': 'message_type must be "text" or "bet".'}), 400
 

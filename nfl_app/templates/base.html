@@ -20,9 +20,15 @@
                 <header>
                     <h1>NFL Predictor Pro</h1>
                     <div class="user-identity">
-                        <label for="username">Your Name:</label>
-                        <input type="text" id="username" placeholder="Enter name to save picks" onchange="saveUsername()">
+                        {% if current_user.is_authenticated %}
+                        <span class="user-display-name" title="Signed in">{{ current_user.username }}</span>
+                        <a href="{{ url_for('auth.logout') }}" class="auth-link">Log out</a>
+                        {% else %}
+                        <a href="{{ url_for('auth.login') }}" class="auth-link">Log in</a>
+                        <a href="{{ url_for('auth.register') }}" class="auth-link">Register</a>
+                        {% endif %}
                     </div>
+                    <input type="hidden" id="current-username" value="{{ current_user.username if current_user.is_authenticated else '' }}">
                 </header>
 
                 {% block content %}{% endblock %}

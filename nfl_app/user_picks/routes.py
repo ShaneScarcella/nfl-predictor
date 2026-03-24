@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request
+from flask_login import login_required, current_user
 import pandas as pd
 import sqlite3
 import os
@@ -119,12 +120,13 @@ def determine_bet_outcome(pick, home_team, away_team, result, home_moneyline, aw
     return 'Loss', 0, float(-bet_amount)
 
 @user_picks.route('/save_pick', methods=['POST'])
+@login_required
 def save_pick():
     ensure_picks_table_exists()
     data = request.get_json()
-    
+    user = current_user.username
+
     try:
-        user = data.get('user')
         season = int(data.get('season'))
         week = int(data.get('week'))
         home_team = data.get('home_team')
@@ -168,14 +170,12 @@ def save_pick():
     return jsonify({'message': 'Pick saved!'})
 
 @user_picks.route('/get_user_picks')
+@login_required
 def get_user_picks():
     ensure_picks_table_exists()
-    user = request.args.get('user')
+    user = current_user.username
     season = request.args.get('season', type=int)
     week = request.args.get('week', type=int)
-
-    if not user:
-        return jsonify([])
 
     conn = get_db_connection()
     picks = conn.execute(
@@ -187,12 +187,11 @@ def get_user_picks():
     return jsonify([dict(ix) for ix in picks])
 
 @user_picks.route('/get_my_picks')
+@login_required
 def get_my_picks():
     """Return all picks for a user, grouped by season and week (newest first)."""
     ensure_picks_table_exists()
-    user = request.args.get('user')
-    if not user:
-        return jsonify([])
+    user = current_user.username
 
     conn = get_db_connection()
     rows = conn.execute(
@@ -204,6 +203,7 @@ def get_my_picks():
     return jsonify([dict(ix) for ix in rows])
 
 @user_picks.route('/get_my_bets', methods=['GET'])
+@login_required
 def get_my_bets():
     """
     Return all bets for a user, optionally filtered by season/week.
@@ -211,12 +211,9 @@ def get_my_bets():
     """
     ensure_picks_table_exists()
 
-    user = request.args.get('user')
+    user = current_user.username
     season = request.args.get('season', type=int)
     week = request.args.get('week', type=int)
-
-    if not user:
-        return jsonify([])
 
     conn = get_db_connection()
     try:

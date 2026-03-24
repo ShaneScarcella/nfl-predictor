@@ -269,6 +269,7 @@
         const res = await fetch('/chat/messages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify(payload),
         });
         const data = await res.json().catch(() => ({}));
@@ -277,7 +278,7 @@
     }
 
     function getUsername() {
-        const inp = document.getElementById('username');
+        const inp = document.getElementById('current-username');
         return (inp && inp.value && inp.value.trim()) || '';
     }
 
@@ -325,13 +326,13 @@
         const input = document.getElementById('chat-input');
         const user = getUsername();
         if (!user) {
-            alert('Enter your name in the header to chat.');
+            alert('Log in to use chat.');
             return;
         }
         const text = (input && input.value && input.value.trim()) || '';
         if (!text) return;
         try {
-            const data = await postChatMessage({ user, message_type: 'text', body: text });
+            const data = await postChatMessage({ message_type: 'text', body: text });
             if (input) input.value = '';
             clearEmptyPlaceholder();
             appendMessageRow(data);
@@ -349,7 +350,7 @@
 
         const user = getUsername();
         if (!user) {
-            alert('Enter your name in the header to share picks.');
+            alert('Log in to share picks.');
             return;
         }
 
@@ -408,7 +409,7 @@
                             }
                             const bet = buildBetPayload(game, p.pick, kind, confidenceNote);
                             try {
-                                const data = await postChatMessage({ user, message_type: 'bet', bet });
+                                const data = await postChatMessage({ message_type: 'bet', bet });
                                 modal.classList.remove('is-open');
                                 modal.setAttribute('aria-hidden', 'true');
                                 clearEmptyPlaceholder();

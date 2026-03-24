@@ -5,26 +5,16 @@ let allTeams = [];
 const modal = document.getElementById('details-modal');
 const modalBody = document.getElementById('modal-body');
 
-const updateAuthUI = () => {
-    const usernameEl = document.getElementById('username');
-    const myBetsButton = document.getElementById('my-bets-button');
-    if (!usernameEl || !myBetsButton) return;
-
-    const username = (usernameEl.value || '').trim();
-    myBetsButton.style.display = username ? '' : 'none';
+const getCurrentUsername = () => {
+    const el = document.getElementById('current-username');
+    return (el && el.value && el.value.trim()) || '';
 };
 
-function saveUsername() {
-    const name = document.getElementById('username').value;
-    if(name && name.trim()) localStorage.setItem('nfl_username', name.trim());
-    else localStorage.removeItem('nfl_username');
-    updateAuthUI();
-}
-
-function loadUsername() {
-    const saved = localStorage.getItem('nfl_username');
-    if(saved) document.getElementById('username').value = saved;
-}
+const updateAuthUI = () => {
+    const myBetsButton = document.getElementById('my-bets-button');
+    if (!myBetsButton) return;
+    myBetsButton.style.display = getCurrentUsername() ? '' : 'none';
+};
 
 const showTab = (tabId) => {
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
@@ -45,10 +35,9 @@ const showTab = (tabId) => {
 };
 
 const savePick = (game, selectedTeam, teamElement, opponentElement) => {
-    const user = document.getElementById('username').value;
-    if (!user) { 
-        alert("Please enter your name at the top first!"); 
-        return; 
+    if (!getCurrentUsername()) {
+        alert('Please log in to save picks.');
+        return;
     }
 
     teamElement.classList.add('selected-pick');
@@ -57,7 +46,6 @@ const savePick = (game, selectedTeam, teamElement, opponentElement) => {
     const seasonFromUi = parseInt(document.getElementById('season-select').value, 10);
     const weekFromUi = parseInt(document.getElementById('week-select').value, 10);
     const payload = {
-        user: user,
         season: Number.isFinite(game.season) ? game.season : seasonFromUi,
         week: Number.isFinite(game.week) ? game.week : weekFromUi,
         home_team: game.home_team,
@@ -68,9 +56,17 @@ const savePick = (game, selectedTeam, teamElement, opponentElement) => {
     fetch('/save_pick', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
+        credentials: 'same-origin',
         body: JSON.stringify(payload)
     })
-    .then(res => res.json())
+    .then(res => {
+        if (res.status === 401) {
+            return res.json().then((d) => {
+                throw new Error(d.error || 'Please log in to save picks.');
+            });
+        }
+        return res.json();
+    })
     .then(data => {
         if (data.error) {
             alert("Error: " + data.error);
@@ -87,14 +83,16 @@ const savePick = (game, selectedTeam, teamElement, opponentElement) => {
 };
 
 const loadUserPicks = async () => {
-    const user = document.getElementById('username').value;
     const season = document.getElementById('season-select').value;
     const week = document.getElementById('week-select').value;
-    
-    if (!user || !season || !week) return [];
+
+    if (!getCurrentUsername() || !season || !week) return [];
 
     try {
-        const res = await fetch(`/get_user_picks?user=${user}&season=${season}&week=${week}`);
+        const res = await fetch(
+            `/get_user_picks?season=${encodeURIComponent(season)}&week=${encodeURIComponent(week)}`,
+            { credentials: 'same-origin' }
+        );
         if (!res.ok) return [];
         return await res.json();
     } catch (e) {
@@ -106,6 +104,7 @@ const loadUserPicks = async () => {
 window.NFLPredictorCore = {
     getWeeklyMatchups: () => weeklyMatchups,
     loadUserPicks,
+    getCurrentUsername,
     getSeasonWeek: () => {
         const s = document.getElementById('season-select');
         const w = document.getElementById('week-select');
@@ -453,12 +452,11 @@ const fetchSoSAnalysis = () => {
 };
 
 const loadMyPicks = () => {
-    const user = document.getElementById('username').value;
     const messageEl = document.getElementById('my-picks-message');
     const listEl = document.getElementById('my-picks-list');
 
-    if (!user || !user.trim()) {
-        messageEl.textContent = 'Enter your name at the top to see your picks.';
+    if (!getCurrentUsername()) {
+        messageEl.textContent = 'Log in to see your picks.';
         messageEl.className = 'my-picks-message prompt';
         listEl.innerHTML = '';
         return;
@@ -468,7 +466,7 @@ const loadMyPicks = () => {
     messageEl.className = 'my-picks-message';
     listEl.innerHTML = '<div class="loader">Loading your picks...</div>';
 
-    fetch(`/get_my_picks?user=${encodeURIComponent(user)}`)
+    fetch('/get_my_picks', { credentials: 'same-origin' })
         .then(res => res.json())
         .then(picks => {
             if (!picks || picks.length === 0) {
@@ -513,7 +511,6 @@ const loadMyPicks = () => {
 };
 
 const loadMyBets = () => {
-    const user = document.getElementById('username').value;
     const season = document.getElementById('season-select').value;
     const week = document.getElementById('week-select').value;
 
@@ -528,9 +525,9 @@ const loadMyBets = () => {
         return num > 0 ? `+$${abs}` : `-$${abs}`;
     };
 
-    if (!user || !user.trim()) {
+    if (!getCurrentUsername()) {
         if (summaryEl) summaryEl.innerHTML = '';
-        messageEl.textContent = 'Enter your name to see your bets.';
+        messageEl.textContent = 'Log in to see your bets.';
         messageEl.className = 'my-bets-message prompt';
         listEl.innerHTML = '';
         return;
@@ -542,11 +539,10 @@ const loadMyBets = () => {
     listEl.innerHTML = '<div class="loader">Loading your bets...</div>';
 
     const params = new URLSearchParams();
-    params.append('user', user.trim());
     if (season) params.append('season', season);
     if (week) params.append('week', week);
 
-    fetch(`/get_my_bets?${params.toString()}`)
+    fetch(`/get_my_bets?${params.toString()}`, { credentials: 'same-origin' })
         .then(res => res.json())
         .then(bets => {
             if (!bets || bets.length === 0) {
@@ -744,7 +740,6 @@ const handleSeasonChange = () => {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
-    loadUsername();
     updateAuthUI();
     
     fetch('/get_performance_stats')
@@ -764,6 +759,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             const el = document.getElementById('performance-summary');
             if (el) el.innerHTML = `<p style="color: var(--incorrect-color); text-align: center;">Error loading model metrics. Check server connection.</p>`;
         });
+
+    // Login/register (and other minimal pages) extend base but have no schedule UI — skip NFL init.
+    if (!document.getElementById('season-select')) {
+        return;
+    }
 
     try {
         const [currentWeekInfo, allSeasonsData, teamsData] = await Promise.all([ 
